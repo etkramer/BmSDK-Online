@@ -133,11 +133,12 @@ public class NetworkManager
         var pawn = Game.SpawnActor<RPawnPlayerBm>(message.Location, message.Rotation);
         if (pawn != null)
         {
-            // Manually attach NetPlayerComponent and set NetId
-            var component = pawn.AttachScriptComponent<NetPlayerComponent>();
-            component.SetNetId(message.NetId);
-            RegisterRemotePlayer(message.NetId, component);
-            Debug.Log($"[NetworkManager] Spawned remote pawn for NetId={message.NetId}");
+            var component = pawn.GetScriptComponent<NetPlayerComponent>();
+            if (component != null)
+            {
+                component.SetNetId(message.NetId);
+                RegisterRemotePlayer(message.NetId, component);
+            }
         }
 
         // If we're the server, forward to other clients

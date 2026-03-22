@@ -66,11 +66,6 @@ public class ServerScript : Script
         // Initialize NetworkManager as server
         NetworkManager.InitAsServer();
 
-        // Attach NetPlayerComponent to host pawn
-        var hostPawn = Game.GetPlayerPawn(0);
-        hostPawn.AttachScriptComponent<NetPlayerComponent>();
-        Debug.Log($"[Server] Attached NetPlayerComponent to host pawn");
-
         // Find host
         var hostEndPoint = OnlineUtils.GetLocalEndPoint();
 
@@ -95,7 +90,7 @@ public class ServerScript : Script
 
         Debug.Log($"[Server] Client connected: {newSocket.RemoteEndPoint}");
 
-        // Register connected client (socket added to NetworkManager after join handshake)
+        // Register connected client
         var client = new ServerClientConnection(newSocket, _clients);
         _clients.Add(client);
 

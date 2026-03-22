@@ -47,11 +47,6 @@ public class ClientScript : Script
         // Initialize NetworkManager as client
         NetworkManager.InitAsClient();
 
-        // Attach NetPlayerComponent to local pawn
-        var localPawn = Game.GetPlayerPawn(0);
-        localPawn.AttachScriptComponent<NetPlayerComponent>();
-        Debug.Log($"[Client] Attached NetPlayerComponent to local pawn");
-
         // Create client socket
         _socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 

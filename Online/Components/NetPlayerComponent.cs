@@ -9,7 +9,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Online.Components;
 
-[ScriptComponent]
+[ScriptComponent(AutoAttach = true)]
 public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     private const double SendRateHz = 20.0;
@@ -35,7 +35,7 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
     public override void OnAttach()
     {
-        Debug.Log($"[NetPlayerComponent] Attached to {Owner.Name}, IsLocal={IsLocal}, NetId={NetId}");
+        Debug.Log($"[NetPlayerComponent] Attached to {Owner.Name}, NetId={NetId}");
         base.OnAttach();
     }
 
@@ -76,8 +76,8 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
         // Only update if we have valid data
         if (position.X != 0 || position.Y != 0 || position.Z != 0)
         {
-            Owner.SetLocation(position);
-            Owner.SetRotation(rotation);
+            Owner.Location = position;
+            Owner.Rotation = rotation;
         }
     }
 
