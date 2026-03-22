@@ -85,85 +85,52 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
 **Goal**: Remote player appears as a fully animated character, not a sliding mesh.
 
-#### 1.1 Core Component Setup
-- [ ] Create `NetPlayerComponent` with `[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]`
-- [ ] Implement `IsLocal` / `IsRemote` detection
-- [ ] Verify AutoAttach works on both local player and spawned remote pawns
-- [ ] Set up NetId assignment (local from GUID, remote from spawn message)
+#### 1.1 Core Component Setup ✅ COMPLETE
+- [x] Create `NetPlayerComponent` with `[ScriptComponent(AutoAttach = true)]`
+- [x] Implement `IsLocal` / `IsRemote` detection
+- [x] Verify AutoAttach works on both local player and spawned remote pawns
+- [x] Set up NetId assignment (local from GUID, remote from spawn message)
 
-#### 1.2 Transform Sync via Component
+#### 1.2 Transform Sync via Component ✅ COMPLETE
+- [x] Implement `InterpolationBuffer` with ring buffer + lerp
+- [x] Throttle send rate (20Hz)
+- [x] Position and rotation sync working
+
+#### 1.3 Pose State Sync ✅ COMPLETE
+- [x] Poll pose state in `OnTick()` (ChangePose is native, can't redirect)
+- [x] Send `AnimStateMessage` on pose/physics change
+- [x] Apply via `ForceChangePose()` on remote pawns
+- [x] Physics state sync via `SetPhysics()`
+
+**Correct property path for reading pose state:**
 ```csharp
-[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]
-public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
-{
-    private InterpolationBuffer _posBuffer = new(capacity: 5);
-
-    public override void OnTick()
-    {
-        if (IsLocal)
-        {
-            // Send position to network (throttled to ~20Hz)
-            NetworkManager.Broadcast(new TransformMessage(NetId, Actor.Location, Actor.Rotation));
-        }
-        else // IsRemote
-        {
-            // Interpolate toward latest received position
-            Actor.SetLocation(_posBuffer.Interpolate(Time.DeltaTime));
-            Actor.SetRotation(_posBuffer.InterpolateRotation(Time.DeltaTime));
-        }
-    }
-}
+var poseInput = Owner.Anim.PosePlayer.Changes[0].Pose.Input;
+var movement = poseInput.MovementStance;
+var weapon = poseInput.WeaponStance;
+var idle = poseInput.IdleStance;
 ```
 
-- [ ] Implement `InterpolationBuffer` with ring buffer + lerp
-- [ ] Add velocity-based extrapolation for late packets
-- [ ] Throttle send rate (20-30Hz sufficient for smooth visuals)
+#### 1.4 Locomotion Animation Sync 🔲 TODO
 
-#### 1.3 Animation State Sync (Hybrid: Tick + Events)
+**CRITICAL FINDING: Root Motion Architecture**
 
-**Problem**: `ChangePose()` is `native` — cannot redirect.
-**Solution**: Poll pose state in `Tick()`, redirect discrete events.
+The game uses **root motion** — animations drive character movement, not the other way around:
+- Animation plays → root bone movement extracted → applied to character position
+- We CANNOT set velocity to make walk/run anims play
+- We MUST sync the actual locomotion animation being played
 
-```csharp
-[ComponentRedirect]
-public void Tick(float deltaTime)
-{
-    Original.Tick(deltaTime);
+**Current state:**
+- Pose changes sync (crouch, glide, combat stance) ✅
+- Position/rotation sync ✅
+- Walk/run animations do NOT play — remote pawn slides in idle pose
 
-    if (IsLocal)
-    {
-        // Read current pose from RAnimNode_Pose
-        var anim = Actor.Anim;  // RPawnCharacter.Anim : RAnimNode_Pose
-        var movement = anim?.GetCurrentMovementStance();
-        var weapon = anim?.GetCurrentWeaponStance();
-        var physics = Actor.Physics;
-
-        // Only send if changed
-        if (movement != _lastMovement || weapon != _lastWeapon || physics != _lastPhysics)
-        {
-            _lastMovement = movement;
-            _lastWeapon = weapon;
-            _lastPhysics = physics;
-            NetworkManager.Broadcast(new PoseStateMessage(NetId, movement, weapon, physics));
-        }
-    }
-}
-```
-
-On receive (`PoseStateMessage`):
-- Find remote pawn by NetId
-- Call `ForceChangePose()` or set physics directly
-- These are native calls, so no redirect loop
-
-#### 1.4 Discrete Events to Redirect
-| Function | Purpose | Can Redirect? |
-|----------|---------|---------------|
-| `Tick()` | Poll pose state | **YES** |
-| `StartCrouch()` | Crouch event | **YES** |
-| `EndCrouch()` | Stand event | **YES** |
-| `GetUpFromRagdoll()` | Ragdoll recovery | **YES** |
-| `ChangePose()` | Core locomotion | **NO (native)** |
-| `SetPhysics()` | Physics mode | Check if native |
+**Required approach:**
+- Investigate `RAnimUtil_MovementPlayer` — this drives locomotion animation
+- Need to sync the movement animation state, not just poses
+- Options:
+  1. Sync `MovementPlayer` state directly (speed, direction, animation name)
+  2. Find the function that triggers locomotion anims and redirect it
+  3. Manually call `PlayAnim()` with the correct locomotion animation
 
 **Deliverable**: Remote Batman walks, runs, crouches, glides — looks like a real player.
 
@@ -395,11 +362,20 @@ RAnimNode_Pose (root)
 - `RPawnCharacter.ForceChangePose()` — immediate pose change
 - `RAnimNode_Pose.ChangePose()` — low-level pose application
 
-### Movement Animation
-Movement uses `RAnimUtil_MovementPlayer` with:
-- Speed-based blending (walk → run → sprint)
-- Directional blending (forward/back/strafe)
-- Turn-in-place animations
+### Movement Animation (Root Motion)
+
+**CRITICAL: The game uses root motion.** Animations drive movement, not velocity-driven blending.
+
+`RAnimUtil_MovementPlayer` handles locomotion:
+- Plays directional movement animations (walk/run/sprint)
+- Root bone translation is extracted and applied to pawn position
+- Animation choice is based on input direction and speed *request*, not current velocity
+
+**Implication for networking:**
+- Cannot just sync velocity and expect correct animations
+- Must sync the actual animation being played, OR
+- Must sync the movement input/request that triggers the animation
+- Remote pawn needs to play the same locomotion animation for natural movement
 
 ### Combat Animation
 Combat moves override the pose system:
@@ -494,38 +470,33 @@ simulated event SetAnimPosition(...)               // Matinee anim control
 3. **Direct state comparison** — only send when state actually changes
 
 ```csharp
-[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]
+[ScriptComponent(AutoAttach = true)]
 public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     private FName _lastMovementStance;
     private FName _lastWeaponStance;
 
-    // Can't redirect ChangePose, so poll in Tick instead
-    [ComponentRedirect]
-    public void Tick(float deltaTime)
+    // Can't redirect ChangePose (native), so poll in OnTick instead
+    public override void OnTick()
     {
-        Original.Tick(deltaTime);
-
         if (IsLocal)
         {
-            var currentMovement = Actor.Anim?.CurrentPose?.MovementStance;
-            var currentWeapon = Actor.Anim?.CurrentPose?.WeaponStance;
-
-            if (currentMovement != _lastMovementStance || currentWeapon != _lastWeaponStance)
+            // Correct path to read current pose state:
+            var changes = Owner.Anim.PosePlayer.Changes;
+            if (changes.Count > 0)
             {
-                _lastMovementStance = currentMovement;
-                _lastWeaponStance = currentWeapon;
-                NetworkManager.Broadcast(new PoseChangeMessage(NetId, currentMovement, currentWeapon));
+                var poseInput = changes[0].Pose.Input;
+                var currentMovement = poseInput.MovementStance;
+                var currentWeapon = poseInput.WeaponStance;
+
+                if (currentMovement != _lastMovementStance || currentWeapon != _lastWeaponStance)
+                {
+                    _lastMovementStance = currentMovement;
+                    _lastWeaponStance = currentWeapon;
+                    NetworkManager.Broadcast(new AnimStateMessage(...));
+                }
             }
         }
-    }
-
-    // CAN redirect discrete events
-    [ComponentRedirect]
-    public void StartCrouch(float heightAdjust)
-    {
-        Original.StartCrouch(heightAdjust);
-        if (IsLocal) NetworkManager.Broadcast(new CrouchMessage(NetId, true));
     }
 }
 ```
@@ -534,22 +505,29 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
 ## Testing Milestones
 
-### Milestone 1: "I See You Moving"
-- [ ] Remote player visible in world
-- [ ] Position updates smoothly
-- [ ] Basic idle animation plays
+### Milestone 1: "I See You Moving" ✅ COMPLETE
+- [x] Remote player visible in world
+- [x] Position updates smoothly
+- [x] Basic idle animation plays
 
-### Milestone 2: "I See You Walking"
-- [ ] Walk/run animations sync
-- [ ] Crouch/stand transitions work
-- [ ] Glide looks correct
+### Milestone 1.5: "I See You Posing" ✅ COMPLETE
+- [x] Crouch/stand poses sync
+- [x] Glide pose works
+- [x] Gadget poses sync
+- [ ] Walk/run animations (requires Phase 1.4 - locomotion sync)
 
-### Milestone 3: "I See You Fighting"
+### Milestone 2: "I See You Walking" 🔲 IN PROGRESS
+- [ ] Walk/run animations sync (blocked: need locomotion animation sync)
+- [x] Crouch/stand transitions work
+- [x] Glide looks correct
+
+### Milestone 3: "I See You Fighting" (Phase 2)
 - [ ] Strike animations visible
 - [ ] Counter animations visible
 - [ ] Takedown animations visible
+- [ ] Evade/roll animations visible
 
-### Milestone 4: "We Can Fight Together"
+### Milestone 4: "We Can Fight Together" (Phase 3)
 - [ ] Enemies react to both players
 - [ ] Damage properly attributed
 - [ ] KO state synced
@@ -603,32 +581,81 @@ Scripts/
 
 ## Next Steps (Immediate)
 
-1. **Validate ComponentRedirect works on target functions**
-   - [ ] Test `[ComponentRedirect]` on `ChangePose()` — does it intercept?
-   - [ ] Test on `ForceChangePose()`, `CapeChangeState()`
-   - [ ] Identify which functions are `native` (can't redirect) vs UnrealScript
+### Option A: Complete Locomotion Sync (Phase 1.4)
+To get walk/run animations working:
 
-2. **Create NetPlayerComponent with AutoAttach**
-   - [ ] `[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]`
-   - [ ] Verify it attaches to local player on game start
-   - [ ] Verify it attaches to spawned remote pawns
-   - [ ] Implement `IsLocal` / `IsRemote` detection
+1. **Investigate `RAnimUtil_MovementPlayer`**
+   - [ ] Find how locomotion animations are triggered
+   - [ ] Check if there's a function we can redirect (not native)
+   - [ ] Understand the movement input → animation flow
 
-3. **Implement pose sync via redirect**
-   - [ ] `[ComponentRedirect]` on `ChangePose()`
-   - [ ] Create `PoseChangeMessage`
-   - [ ] Send on local, apply on remote
-   - [ ] Confirm no infinite loop (redirect doesn't fire on remote apply)
+2. **Sync locomotion animation state**
+   - [ ] Identify what state needs to be synced (anim name? speed? direction?)
+   - [ ] Create `LocomotionMessage` with required data
+   - [ ] Apply on remote pawn to trigger same animation
 
-4. **Implement transform sync in OnTick**
-   - [ ] Throttled send (20-30Hz)
-   - [ ] `InterpolationBuffer` for smooth receive
-   - [ ] Basic extrapolation
+3. **Handle root motion on remote**
+   - [ ] Remote pawn plays locomotion anim with root motion
+   - [ ] Reconcile root motion position with network position (may drift)
+   - [ ] Consider: disable root motion on remote, just play anim visually?
 
-5. **Test environment**
-   - Use Bane's Steel Mill (indoor, limited area)
-   - Two game instances on localhost
-   - Log all intercepted function calls to verify coverage
+### Option B: Skip to Combat Sync (Phase 2)
+If locomotion proves too complex, move to combat animations:
+
+1. **Intercept combat moves**
+   - [ ] Test `[ComponentRedirect]` on `RCombatMove.OnInitialiseMulticast()`
+   - [ ] Create `CombatMoveMessage` with move class + anim data
+   - [ ] Spawn/play combat move on remote pawn
+
+2. **Custom animation slot sync**
+   - [ ] Find `PlayCustomAnim()` or similar on AnimNodeSlot
+   - [ ] Redirect and broadcast animation name + params
+   - [ ] Apply on remote via direct anim call
+
+### Current State Summary
+- ✅ Transform sync (position, rotation) at 20Hz with interpolation
+- ✅ Pose sync (crouch, glide, combat stance, gadget poses)
+- ✅ Physics state sync
+- ❌ Locomotion animations (walk/run) - remote slides in idle
+- ❌ Combat animations (strikes, evades, counters)
+- ❌ Custom animations (batarang throw, etc.)
+
+---
+
+## Session Learnings
+
+### 2026-03-22: Phase 1.3 Implementation
+
+**Completed:**
+- Pose state sync via polling in `OnTick()`
+- `AnimStateMessage` (TypeId=4) for stance + physics sync
+- Remote pawns correctly show crouch, glide, gadget poses
+
+**Key Discoveries:**
+
+1. **Correct property path for pose state:**
+   ```
+   Owner.Anim.PosePlayer.Changes[0].Pose.Input.MovementStance
+   ```
+   NOT `Owner.Anim.CurrentPose.MovementStance` (doesn't exist)
+
+2. **TArray uses `.Count`, not `.Length`**
+
+3. **Root motion architecture:**
+   - Animations drive character movement (root bone → position)
+   - Cannot set velocity to trigger walk/run anims
+   - Must sync the actual animation being played
+   - This affects how we approach locomotion sync
+
+4. **What works vs. what doesn't:**
+   - ✅ Pose changes (discrete state changes like crouch/glide)
+   - ✅ Position sync (remote moves to correct location)
+   - ❌ Locomotion anims (walk/run) — need animation-level sync
+   - ❌ Combat/evade anims — these use combat move system or custom anims
+
+**Next session priorities:**
+- Investigate `RAnimUtil_MovementPlayer` for locomotion sync
+- Or skip to Phase 2 (combat animation sync) if locomotion is too complex
 
 ---
 
