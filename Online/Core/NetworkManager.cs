@@ -161,8 +161,30 @@ public class NetworkManager
 
     public void HandleActorSpawn(ActorSpawnMessage message)
     {
-        // Spawn a remote pawn
-        var pawn = Game.SpawnActor<RPawnPlayerBm>(message.Location, message.Rotation);
+        // Spawn a controller for the remote player
+        var controller = Game.SpawnActor<RPlayerControllerCombat>(message.Location, message.Rotation);
+        if (controller != null)
+        {
+            Debug.Log($"[NetworkManager] Spawned controller NetId={message.NetId}");
+
+            // Set up the controller's NetControllerComponent
+            var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
+            if (controllerComponent != null)
+            {
+                controllerComponent.SetNetId(message.NetId);
+            }
+        }
+        else
+        {
+            Debug.Log($"[NetworkManager] Failed to spawn controller for NetId={message.NetId}");
+        }
+
+        // Spawn a pawn for the remote player
+        var gameInfo = Game.GetGameInfo();
+        gameInfo.DefaultPawnClass = RPawnPlayerBm.StaticClass();
+        gameInfo.RestartPlayer(controller);
+
+        var pawn = (RPawnPlayerCombat)controller.Pawn;
         if (pawn == null)
         {
             Debug.Log($"[NetworkManager] Failed to spawn pawn for NetId={message.NetId}");
@@ -175,25 +197,6 @@ public class NetworkManager
         {
             playerComponent.SetNetId(message.NetId);
             RegisterRemotePlayer(message.NetId, playerComponent);
-        }
-
-        // Spawn a controller for the remote pawn
-        var controller = Game.SpawnActor<RPlayerControllerCombat>(message.Location, message.Rotation);
-        if (controller != null)
-        {
-            controller.Possess(pawn, false);
-            Debug.Log($"[NetworkManager] Spawned controller for remote pawn NetId={message.NetId}");
-
-            // Set up the controller's NetControllerComponent
-            var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
-            if (controllerComponent != null)
-            {
-                controllerComponent.SetNetId(message.NetId);
-            }
-        }
-        else
-        {
-            Debug.Log($"[NetworkManager] Failed to spawn controller for NetId={message.NetId}");
         }
 
         // If we're the server, forward to other clients
