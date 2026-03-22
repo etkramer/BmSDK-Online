@@ -16,10 +16,6 @@ public class ClientServerConnection(Socket socket) : Connection(socket)
             Debug.Log($"[Client] Received spawn message for NetId={spawnMessage.NetId}");
             NetworkManager.Instance?.HandleActorSpawn(spawnMessage);
         }
-        else if (message is AnimStateMessage animMessage)
-        {
-            NetworkManager.Instance?.HandleAnimState(animMessage);
-        }
 
         base.ProcessMessage(message);
     }

@@ -11,7 +11,12 @@ public record class JoinMessage(string DisplayName, int NetId) : Message
     public override byte TypeId => 1;
 }
 
-public record class ActorMoveMessage(int NetId, Vector3 NewLocation, Rotator NewRotation, Vector3 MoveDirection) : Message
+public record class ActorMoveMessage(
+    int NetId,
+    Vector3 NewLocation,
+    Rotator NewRotation,
+    Vector3 MoveDirection
+) : Message
 {
     public override byte TypeId => 2;
 }
@@ -19,17 +24,6 @@ public record class ActorMoveMessage(int NetId, Vector3 NewLocation, Rotator New
 public record class ActorSpawnMessage(int NetId, string ActorClass, Vector3 Location, Rotator Rotation) : Message
 {
     public override byte TypeId => 3;
-}
-
-public record class AnimStateMessage(
-    int NetId,
-    string MovementStance,
-    string WeaponStance,
-    string IdleStance,
-    byte Physics
-) : Message
-{
-    public override byte TypeId => 4;
 }
 
 public abstract record class Message

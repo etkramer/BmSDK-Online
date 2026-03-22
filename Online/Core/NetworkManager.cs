@@ -61,12 +61,6 @@ public class NetworkManager
         BroadcastMessage(message);
     }
 
-    public void BroadcastAnimState(int netId, string movementStance, string weaponStance, string idleStance, byte physics)
-    {
-        var message = new AnimStateMessage(netId, movementStance, weaponStance, idleStance, physics);
-        BroadcastMessage(message);
-    }
-
     private void BroadcastMessage(Message message)
     {
         if (IsServer)
@@ -112,24 +106,6 @@ public class NetworkManager
         else
         {
             Debug.Log($"[NetworkManager] No remote player found for NetId={message.NetId}, registered: {string.Join(", ", _remotePlayers.Keys)}");
-        }
-
-        // If we're the server, forward to other clients
-        ForwardToOtherClients(message, senderSocket);
-    }
-
-    public void HandleAnimState(AnimStateMessage message, Socket senderSocket = null)
-    {
-        // Find the remote player component with this NetId
-        var component = GetRemotePlayer(message.NetId);
-        if (component != null)
-        {
-            component.ReceiveAnimState(
-                message.MovementStance,
-                message.WeaponStance,
-                message.IdleStance,
-                message.Physics
-            );
         }
 
         // If we're the server, forward to other clients

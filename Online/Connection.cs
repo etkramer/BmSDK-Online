@@ -52,7 +52,6 @@ public abstract class Connection
                 1 => JsonSerializer.Deserialize<JoinMessage>(json, Message.SerializerOptions),
                 2 => JsonSerializer.Deserialize<ActorMoveMessage>(json, Message.SerializerOptions),
                 3 => JsonSerializer.Deserialize<ActorSpawnMessage>(json, Message.SerializerOptions),
-                4 => JsonSerializer.Deserialize<AnimStateMessage>(json, Message.SerializerOptions),
                 _ => throw new NotSupportedException($"Encountered unknown message type {typeId}"),
             };
 

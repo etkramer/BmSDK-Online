@@ -67,9 +67,6 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
     private void HandleLocalTick()
     {
-        // Poll animation state every tick (only sends on change)
-        PollAndSendAnimState();
-
         // Throttle transform send rate
         if (_sendTimer.Elapsed.TotalSeconds < SendInterval)
         {
@@ -86,45 +83,6 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
         // Broadcast position and movement input to network
         NetworkManager.Instance?.BroadcastTransform(NetId, Owner.Location, Owner.Rotation, moveDirection);
-    }
-
-    private void PollAndSendAnimState()
-    {
-        // Read current pose from RAnimNode_Pose
-        var anim = Owner.Anim;
-        if (anim == null) return;
-
-        var changes = anim.PosePlayer.Changes;
-        if (changes.Count == 0) return;
-
-        // Get the current (head) stance change's pose input
-        var poseInput = changes[0].Pose.Input;
-        var currentMovement = poseInput.MovementStance;
-        var currentWeapon = poseInput.WeaponStance;
-        var currentIdle = poseInput.IdleStance;
-        var currentPhysics = Owner.Physics;
-
-        // Only send if something changed
-        bool changed = currentMovement != _lastMovementStance
-                    || currentWeapon != _lastWeaponStance
-                    || currentIdle != _lastIdleStance
-                    || currentPhysics != _lastPhysics;
-
-        if (changed)
-        {
-            _lastMovementStance = currentMovement;
-            _lastWeaponStance = currentWeapon;
-            _lastIdleStance = currentIdle;
-            _lastPhysics = currentPhysics;
-
-            NetworkManager.Instance?.BroadcastAnimState(
-                NetId,
-                currentMovement.ToString(),
-                currentWeapon.ToString(),
-                currentIdle.ToString(),
-                (byte)currentPhysics
-            );
-        }
     }
 
     private void HandleRemoteTick()
@@ -159,19 +117,5 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
     {
         _interpolationBuffer.AddSnapshot(position, rotation, _gameTime);
         _lastMoveDirection = moveDirection;
-    }
-
-    public void ReceiveAnimState(string movementStance, string weaponStance, string idleStance, byte physics)
-    {
-        // Apply pose change to remote pawn
-        var movement = new FName(movementStance);
-        var weapon = new FName(weaponStance);
-        var idle = new FName(idleStance);
-
-        // ForceChangePose applies immediately without transition
-        Owner.ForceChangePose(movement, weapon, idle);
-
-        // Apply physics state
-        Owner.SetPhysics((EPhysics)physics);
     }
 }
