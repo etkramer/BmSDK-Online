@@ -91,7 +91,7 @@ public class NetworkManager
         }
     }
 
-    public void HandleActorMove(ActorMoveMessage message)
+    public void HandleActorMove(ActorMoveMessage message, Socket senderSocket = null)
     {
         // Find the remote player component with this NetId
         var component = GetRemotePlayer(message.NetId);
@@ -99,12 +99,22 @@ public class NetworkManager
         {
             component.ReceiveTransform(message.NewLocation, message.NewRotation);
         }
+        else
+        {
+            Debug.Log($"[NetworkManager] No remote player found for NetId={message.NetId}, registered: {string.Join(", ", _remotePlayers.Keys)}");
+        }
 
         // If we're the server, forward to other clients
         if (IsServer)
         {
             foreach (var socket in _clientSockets)
             {
+                if (socket == senderSocket)
+                {
+                    // Don't echo back to sender
+                    continue;
+                }
+
                 try
                 {
                     message.Send(socket);
@@ -123,12 +133,11 @@ public class NetworkManager
         var pawn = Game.SpawnActor<RPawnPlayerBm>(message.Location, message.Rotation);
         if (pawn != null)
         {
-            var component = pawn.GetScriptComponent<NetPlayerComponent>();
-            if (component != null)
-            {
-                component.SetNetId(message.NetId);
-                RegisterRemotePlayer(message.NetId, component);
-            }
+            // Manually attach NetPlayerComponent and set NetId
+            var component = pawn.AttachScriptComponent<NetPlayerComponent>();
+            component.SetNetId(message.NetId);
+            RegisterRemotePlayer(message.NetId, component);
+            Debug.Log($"[NetworkManager] Spawned remote pawn for NetId={message.NetId}");
         }
 
         // If we're the server, forward to other clients

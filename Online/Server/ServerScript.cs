@@ -66,6 +66,11 @@ public class ServerScript : Script
         // Initialize NetworkManager as server
         NetworkManager.InitAsServer();
 
+        // Attach NetPlayerComponent to host pawn
+        var hostPawn = Game.GetPlayerPawn(0);
+        hostPawn.AttachScriptComponent<NetPlayerComponent>();
+        Debug.Log($"[Server] Attached NetPlayerComponent to host pawn");
+
         // Find host
         var hostEndPoint = OnlineUtils.GetLocalEndPoint();
 
@@ -78,7 +83,6 @@ public class ServerScript : Script
         _socket.BeginAccept(OnSocketAccept, null);
 
         // Disable pausing on focus loss
-        Game.GetWorldInfo().NetMode = WorldInfo.ENetMode.NM_ListenServer;
         Game.GetEngine().bPauseOnLossOfFocus = false;
 
         Debug.Log($"[Server] Listening on port {hostEndPoint.Port}");
@@ -91,12 +95,9 @@ public class ServerScript : Script
 
         Debug.Log($"[Server] Client connected: {newSocket.RemoteEndPoint}");
 
-        // Register connected client
-        var client = new ServerClientConnection(newSocket);
+        // Register connected client (socket added to NetworkManager after join handshake)
+        var client = new ServerClientConnection(newSocket, _clients);
         _clients.Add(client);
-
-        // Register socket with NetworkManager for broadcasting
-        NetworkManager.Instance?.AddClientSocket(newSocket);
 
         // Resume listening
         _socket.BeginAccept(OnSocketAccept, null);

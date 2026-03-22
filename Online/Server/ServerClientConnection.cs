@@ -6,11 +6,18 @@ using Online.Core;
 
 namespace Online.Server;
 
-public class ServerClientConnection(Socket socket) : Connection(socket)
+public class ServerClientConnection : Connection
 {
     public bool IsJoined { get; set; }
     public string DisplayName { get; set; } = null;
     public int ClientNetId { get; set; } = -1;
+
+    private readonly List<ServerClientConnection> _allClients;
+
+    public ServerClientConnection(Socket socket, List<ServerClientConnection> allClients) : base(socket)
+    {
+        _allClients = allClients;
+    }
 
     protected override void ProcessMessage(Message message)
     {
@@ -21,7 +28,7 @@ public class ServerClientConnection(Socket socket) : Connection(socket)
         else if (message is ActorMoveMessage moveMessage)
         {
             // Route through NetworkManager (will forward to other clients)
-            NetworkManager.Instance?.HandleActorMove(moveMessage);
+            NetworkManager.Instance?.HandleActorMove(moveMessage, Socket);
         }
 
         base.ProcessMessage(message);
@@ -35,20 +42,33 @@ public class ServerClientConnection(Socket socket) : Connection(socket)
 
         Debug.Log($"[Server] Player joined: \"{DisplayName}\" (NetId={ClientNetId})");
 
-        // Spawn a pawn for this client on the server
+        // Spawn a pawn for this client on the server (using same path as clients)
         var gameInfo = Game.GetGameInfo();
         var playerStart = gameInfo.FindPlayerStart(Game.GetPlayerController(0));
-        var clientPawn = Game.SpawnActor<RPawnPlayerCombat>(playerStart.Location, playerStart.Rotation);
+        var newClientSpawnMessage = new ActorSpawnMessage(
+            ClientNetId,
+            nameof(RPawnPlayerBm),
+            playerStart.Location,
+            playerStart.Rotation
+        );
+        NetworkManager.Instance?.HandleActorSpawn(newClientSpawnMessage);
 
-        if (clientPawn != null)
+        // Tell new client about existing clients
+        foreach (var otherClient in _allClients)
         {
-            // The pawn auto-attaches NetPlayerComponent, update its NetId to match client
-            var component = clientPawn.GetScriptComponent<NetPlayerComponent>();
-            if (component != null)
+            if (!otherClient.IsJoined || otherClient == this)
             {
-                component.SetNetId(ClientNetId);
-                NetworkManager.Instance?.RegisterRemotePlayer(ClientNetId, component);
+                continue;
             }
+
+            var existingClientSpawnMessage = new ActorSpawnMessage(
+                otherClient.ClientNetId,
+                nameof(RPawnPlayerBm),
+                playerStart.Location,
+                playerStart.Rotation
+            );
+            existingClientSpawnMessage.Send(Socket);
+            Debug.Log($"[Server] Told new client {ClientNetId} about existing client {otherClient.ClientNetId}");
         }
 
         // Send the host's player info back to the client so they can spawn a remote pawn
@@ -58,11 +78,14 @@ public class ServerClientConnection(Socket socket) : Connection(socket)
         {
             var spawnMessage = new ActorSpawnMessage(
                 hostComponent.NetId,
-                "RPawnPlayerBm",
+                nameof(RPawnPlayerBm),
                 hostPawn.Location,
                 hostPawn.Rotation
             );
             spawnMessage.Send(Socket);
         }
+
+        // Now that client knows about host, add socket for transform broadcasts
+        NetworkManager.Instance?.AddClientSocket(Socket);
     }
 }

@@ -9,12 +9,11 @@ public class ClientServerConnection(Socket socket) : Connection(socket)
     {
         if (message is ActorMoveMessage moveMessage)
         {
-            // Route through NetworkManager for interpolated handling
             NetworkManager.Instance?.HandleActorMove(moveMessage);
         }
         else if (message is ActorSpawnMessage spawnMessage)
         {
-            // Server is telling us to spawn a remote player (the host)
+            Debug.Log($"[Client] Received spawn message for NetId={spawnMessage.NetId}");
             NetworkManager.Instance?.HandleActorSpawn(spawnMessage);
         }
 

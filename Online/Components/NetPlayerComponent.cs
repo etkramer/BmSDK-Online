@@ -9,7 +9,7 @@ using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Online.Components;
 
-[ScriptComponent(AutoAttach = true)]
+[ScriptComponent]
 public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     private const double SendRateHz = 20.0;

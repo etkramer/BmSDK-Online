@@ -8,8 +8,7 @@
       "name": "Launch",
       "type": "cppvsdbg",
       "request": "launch",
-      "preLaunchTask": "Build",
-      "program": "${workspaceFolder}../../Binaries/Win32/BatmanAC-patched.exe",
+      "program": "${workspaceFolder}/../../Binaries/Win32/BatmanAC-patched.exe",
       "args": ["-nosplash"],
       "cwd": "${workspaceFolder}/../../Binaries/Win32/",
       "logging": {

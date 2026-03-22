@@ -47,6 +47,11 @@ public class ClientScript : Script
         // Initialize NetworkManager as client
         NetworkManager.InitAsClient();
 
+        // Attach NetPlayerComponent to local pawn
+        var localPawn = Game.GetPlayerPawn(0);
+        localPawn.AttachScriptComponent<NetPlayerComponent>();
+        Debug.Log($"[Client] Attached NetPlayerComponent to local pawn");
+
         // Create client socket
         _socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
@@ -74,7 +79,9 @@ public class ClientScript : Script
         // Send "join" message to server (includes our local player's NetId)
         var localPawn = (RPawnPlayerCombat)Game.GetPlayerPawn(0);
         var localComponent = localPawn?.GetScriptComponent<NetPlayerComponent>();
-        var joinMessage = new JoinMessage("Player", localComponent?.NetId ?? 0);
+        var netId = localComponent?.NetId ?? 0;
+        Debug.Log($"[Client] Sending JoinMessage with NetId={netId}");
+        var joinMessage = new JoinMessage("Player", netId);
         joinMessage.Send(_socket);
     }
 }
