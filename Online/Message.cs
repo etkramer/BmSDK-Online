@@ -26,6 +26,11 @@ public record class ActorSpawnMessage(int NetId, string ActorClass, Vector3 Loca
     public override byte TypeId => 3;
 }
 
+public record class ControllerStateMessage(int NetId, string StateName) : Message
+{
+    public override byte TypeId => 4;
+}
+
 public abstract record class Message
 {
     public const short BufferSize = 256;

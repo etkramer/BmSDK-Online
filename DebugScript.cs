@@ -29,8 +29,12 @@ public class DebugScript : Script
     private static void DebugLoadGame()
     {
         var console = Game.GetConsole();
+        // console.ConsoleCommand(
+        //     "start batentry?Players=Playable_Batman?Area=BaneSS,BaneSS_B1?Chapters=1"
+        // );
+
         console.ConsoleCommand(
-            "start batentry?Players=Playable_Batman?Area=BaneSS,BaneSS_B1?Chapters=1"
+            "start batentry?Players=Playable_Batman?Area=Church,Church_A1?Chapters=1"
         );
     }
 

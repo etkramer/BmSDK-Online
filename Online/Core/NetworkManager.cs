@@ -3,6 +3,7 @@ using System.Numerics;
 using BmSDK;
 using BmSDK.BmGame;
 using BmSDK.BmScript;
+using BmSDK.Engine;
 using Online.Components;
 
 namespace Online.Core;
@@ -61,6 +62,12 @@ public class NetworkManager
         BroadcastMessage(message);
     }
 
+    public void BroadcastControllerState(int netId, FName stateName)
+    {
+        var message = new ControllerStateMessage(netId, stateName.ToString());
+        BroadcastMessage(message);
+    }
+
     private void BroadcastMessage(Message message)
     {
         if (IsServer)
@@ -112,6 +119,23 @@ public class NetworkManager
         ForwardToOtherClients(message, senderSocket);
     }
 
+    public void HandleControllerState(ControllerStateMessage message, Socket senderSocket = null)
+    {
+        // Find the remote player's controller
+        var playerComponent = GetRemotePlayer(message.NetId);
+        if (playerComponent?.Owner?.Controller is RPlayerControllerCombat controller)
+        {
+            var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
+            if (controllerComponent != null)
+            {
+                controllerComponent.ReceiveStateChange(new FName(message.StateName));
+            }
+        }
+
+        // If we're the server, forward to other clients
+        ForwardToOtherClients(message, senderSocket);
+    }
+
     private void ForwardToOtherClients(Message message, Socket senderSocket)
     {
         if (!IsServer) return;
@@ -139,14 +163,37 @@ public class NetworkManager
     {
         // Spawn a remote pawn
         var pawn = Game.SpawnActor<RPawnPlayerBm>(message.Location, message.Rotation);
-        if (pawn != null)
+        if (pawn == null)
         {
-            var component = pawn.GetScriptComponent<NetPlayerComponent>();
-            if (component != null)
+            Debug.Log($"[NetworkManager] Failed to spawn pawn for NetId={message.NetId}");
+            return;
+        }
+
+        // Set up the pawn's NetPlayerComponent
+        var playerComponent = pawn.GetScriptComponent<NetPlayerComponent>();
+        if (playerComponent != null)
+        {
+            playerComponent.SetNetId(message.NetId);
+            RegisterRemotePlayer(message.NetId, playerComponent);
+        }
+
+        // Spawn a controller for the remote pawn
+        var controller = Game.SpawnActor<RPlayerControllerCombat>(message.Location, message.Rotation);
+        if (controller != null)
+        {
+            controller.Possess(pawn, false);
+            Debug.Log($"[NetworkManager] Spawned controller for remote pawn NetId={message.NetId}");
+
+            // Set up the controller's NetControllerComponent
+            var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
+            if (controllerComponent != null)
             {
-                component.SetNetId(message.NetId);
-                RegisterRemotePlayer(message.NetId, component);
+                controllerComponent.SetNetId(message.NetId);
             }
+        }
+        else
+        {
+            Debug.Log($"[NetworkManager] Failed to spawn controller for NetId={message.NetId}");
         }
 
         // If we're the server, forward to other clients

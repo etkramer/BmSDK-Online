@@ -30,6 +30,10 @@ public class ServerClientConnection : Connection
             // Route through NetworkManager (will forward to other clients)
             NetworkManager.Instance?.HandleActorMove(moveMessage, Socket);
         }
+        else if (message is ControllerStateMessage stateMessage)
+        {
+            NetworkManager.Instance?.HandleControllerState(stateMessage, Socket);
+        }
 
         base.ProcessMessage(message);
     }
@@ -83,6 +87,17 @@ public class ServerClientConnection : Connection
                 hostPawn.Rotation
             );
             spawnMessage.Send(Socket);
+
+            // Send host's current controller state so remote starts in sync
+            var hostController = hostPawn.Controller as RPlayerControllerCombat;
+            if (hostController != null)
+            {
+                var stateMessage = new ControllerStateMessage(
+                    hostComponent.NetId,
+                    hostController.GetStateName().ToString()
+                );
+                stateMessage.Send(Socket);
+            }
         }
 
         // Now that client knows about host, add socket for transform broadcasts

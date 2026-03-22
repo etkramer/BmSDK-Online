@@ -612,9 +612,9 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 - [x] Gadget poses sync
 - [ ] Walk/run animations (requires Phase 1.4 - locomotion sync)
 
-### Milestone 2: "I See You Walking" 🔲 IN PROGRESS
-- [ ] Walk/run animations sync (blocked: need locomotion animation sync)
-- [x] Crouch/stand transitions work
+### Milestone 2: "I See You Walking" ✅ COMPLETE
+- [x] Walk/run animations sync (via MoveInDirection + controller state)
+- [x] Crouch/stand transitions work (via controller StealthMoveMode sync)
 - [x] Glide looks correct
 
 ### Milestone 3: "I See You Fighting" (Phase 2)
@@ -650,8 +650,9 @@ Scripts/
 │   │   └── ...
 │   │
 │   ├── Components/                 # THE CORE SYNC SYSTEM
-│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerCombat] - transform, pose, cape
-│   │   ├── NetCombatComponent.cs   # [AutoAttach=RCombatMove] - combat sync
+│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerCombat] - transform, locomotion
+│   │   ├── NetControllerComponent.cs # [AutoAttach=RPlayerControllerCombat] - controller state sync
+│   │   ├── NetCombatComponent.cs   # [AutoAttach=RCombatMove] - combat sync (TODO)
 │   │   ├── NetEnemyComponent.cs    # [AutoAttach=RPawnVillain] - enemy state (Phase 3)
 │   │   └── NetComponent.cs         # Base with NetId (existing)
 │   │
@@ -733,6 +734,7 @@ Combat moves may need special handling via `RCombatMove` interception, or may wo
 - ✅ Pose sync (crouch, glide, combat stance, gadget poses)
 - ✅ Physics state sync
 - ✅ Locomotion sync via `MoveInDirection()` (walk/run animations work)
+- ✅ Controller state sync (WalkingMode, RunningMode, StealthMoveMode, etc.)
 - ❌ Combat animations (strikes, evades, counters)
 - ❌ Custom animations (batarang throw, etc.)
 
@@ -824,6 +826,35 @@ The `simulated` and `reliable server/client` markers throughout the codebase exi
 - Local: `controller.HasMovementInput() ? Owner.InputHeading() : Vector3.Zero`
 - Remote: `Owner.MoveInDirection(_lastMoveDirection)` every tick
 - Extended `ActorMoveMessage` with `MoveDirection` field
+
+---
+
+### 2026-03-22: Controller State Sync ✅
+
+**Goal:** Sync controller states (WalkingMode, RunningMode, StealthMoveMode) so remote pawns run/crouch correctly.
+
+**Architecture:**
+- Remote pawns now have their own `RPlayerControllerCombat` (spawned and possessed during `HandleActorSpawn`)
+- `NetControllerComponent` auto-attaches to all `RPlayerControllerCombat` instances
+- Uses `[ComponentRedirect]` on `BeginState` to intercept state changes
+- When local controller enters a new state, broadcasts `ControllerStateMessage`
+- Remote controller receives and calls `GotoState(stateName)`
+
+**Key States Synced:**
+- `WalkingMode` — Normal walking (calls `SetWalkSpeed()`)
+- `RunningMode` — Running (calls `SetRunSpeed()`)
+- `StealthMoveMode` — Crouching (calls `SetStealthSpeed()`, changes pose to 'Crouching')
+
+**Why this approach:**
+- The controller's state machine handles ALL state-specific logic (speed, pose, camera, etc.)
+- We just sync the state name, and the game does the rest
+- Much cleaner than syncing individual properties
+
+**Files Added/Modified:**
+- `NetControllerComponent.cs` — New component for controller state sync
+- `ControllerStateMessage` — New message type (TypeId=4)
+- `NetworkManager.cs` — Added controller spawning and state handling
+- `Connection.cs`, `ClientServerConnection.cs`, `ServerClientConnection.cs` — Message routing
 
 ---
 
