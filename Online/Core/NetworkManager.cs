@@ -58,7 +58,17 @@ public class NetworkManager
     public void BroadcastTransform(int netId, Vector3 location, Rotator rotation)
     {
         var message = new ActorMoveMessage(netId, location, rotation);
+        BroadcastMessage(message);
+    }
 
+    public void BroadcastAnimState(int netId, string movementStance, string weaponStance, string idleStance, byte physics)
+    {
+        var message = new AnimStateMessage(netId, movementStance, weaponStance, idleStance, physics);
+        BroadcastMessage(message);
+    }
+
+    private void BroadcastMessage(Message message)
+    {
         if (IsServer)
         {
             // Server sends to all clients
@@ -105,24 +115,46 @@ public class NetworkManager
         }
 
         // If we're the server, forward to other clients
-        if (IsServer)
-        {
-            foreach (var socket in _clientSockets)
-            {
-                if (socket == senderSocket)
-                {
-                    // Don't echo back to sender
-                    continue;
-                }
+        ForwardToOtherClients(message, senderSocket);
+    }
 
-                try
-                {
-                    message.Send(socket);
-                }
-                catch (SocketException)
-                {
-                    // Client disconnected
-                }
+    public void HandleAnimState(AnimStateMessage message, Socket senderSocket = null)
+    {
+        // Find the remote player component with this NetId
+        var component = GetRemotePlayer(message.NetId);
+        if (component != null)
+        {
+            component.ReceiveAnimState(
+                message.MovementStance,
+                message.WeaponStance,
+                message.IdleStance,
+                message.Physics
+            );
+        }
+
+        // If we're the server, forward to other clients
+        ForwardToOtherClients(message, senderSocket);
+    }
+
+    private void ForwardToOtherClients(Message message, Socket senderSocket)
+    {
+        if (!IsServer) return;
+
+        foreach (var socket in _clientSockets)
+        {
+            if (socket == senderSocket)
+            {
+                // Don't echo back to sender
+                continue;
+            }
+
+            try
+            {
+                message.Send(socket);
+            }
+            catch (SocketException)
+            {
+                // Client disconnected
             }
         }
     }

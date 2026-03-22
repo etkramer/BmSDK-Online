@@ -30,6 +30,11 @@ public class ServerClientConnection : Connection
             // Route through NetworkManager (will forward to other clients)
             NetworkManager.Instance?.HandleActorMove(moveMessage, Socket);
         }
+        else if (message is AnimStateMessage animMessage)
+        {
+            // Route through NetworkManager (will forward to other clients)
+            NetworkManager.Instance?.HandleAnimState(animMessage, Socket);
+        }
 
         base.ProcessMessage(message);
     }
