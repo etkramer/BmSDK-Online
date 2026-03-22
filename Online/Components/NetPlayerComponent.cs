@@ -30,6 +30,9 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
     private FName _lastIdleStance;
     private EPhysics _lastPhysics;
 
+    // Input sync for locomotion
+    private Vector3 _lastMoveDirection;
+
     public NetPlayerComponent()
     {
         NetId = BitConverter.ToInt32(Guid.NewGuid().ToByteArray(), 0);
@@ -74,8 +77,15 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
         }
         _sendTimer.Restart();
 
-        // Broadcast position to network
-        NetworkManager.Instance?.BroadcastTransform(NetId, Owner.Location, Owner.Rotation);
+        // Get movement input direction (what the player is pressing)
+        // Check if there's actual input first, otherwise return zero
+        var controller = Owner.Controller as RPlayerControllerCombat;
+        var moveDirection = controller?.HasMovementInput() == true
+            ? Owner.InputHeading()
+            : Vector3.Zero;
+
+        // Broadcast position and movement input to network
+        NetworkManager.Instance?.BroadcastTransform(NetId, Owner.Location, Owner.Rotation, moveDirection);
     }
 
     private void PollAndSendAnimState()
@@ -125,14 +135,30 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
         // Only update if we have valid data
         if (position.X != 0 || position.Y != 0 || position.Z != 0)
         {
-            Owner.Location = position;
-            Owner.Rotation = rotation;
+            // Always call MoveInDirection - it handles both movement animation AND facing
+            // Zero vector = stop moving, non-zero = walk/run in that direction
+            Owner.MoveInDirection(_lastMoveDirection);
+
+            // Correct position to prevent drift from root motion
+            var currentPos = Owner.Location;
+            var posDiff = position - currentPos;
+
+            if (posDiff.LengthSquared() > 10000) // ~100 units - snap
+            {
+                Owner.Location = position;
+                Owner.Rotation = rotation;
+            }
+            else
+            {
+                Owner.Location = position;
+            }
         }
     }
 
-    public void ReceiveTransform(Vector3 position, Rotator rotation)
+    public void ReceiveTransform(Vector3 position, Rotator rotation, Vector3 moveDirection)
     {
         _interpolationBuffer.AddSnapshot(position, rotation, _gameTime);
+        _lastMoveDirection = moveDirection;
     }
 
     public void ReceiveAnimState(string movementStance, string weaponStance, string idleStance, byte physics)

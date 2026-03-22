@@ -110,29 +110,125 @@ var weapon = poseInput.WeaponStance;
 var idle = poseInput.IdleStance;
 ```
 
-#### 1.4 Locomotion Animation Sync 🔲 TODO
+#### 1.4 Full Animation Sync 🔲 TODO
 
-**CRITICAL FINDING: Root Motion Architecture**
+**The Challenge**
 
-The game uses **root motion** — animations drive character movement, not the other way around:
-- Animation plays → root bone movement extracted → applied to character position
-- We CANNOT set velocity to make walk/run anims play
-- We MUST sync the actual locomotion animation being played
+The game has dozens of animation states beyond walking/running:
+- Locomotion (walk, run, sprint, directional blending)
+- Gliding, diving, grappling
+- Gadget aiming (batarang, REC, explosive gel, etc.)
+- Traversal (railing walk, ledge grab, vent crawl, leaping gaps)
+- Crouching, crawling
+- Combat moves (handled separately in Phase 2)
+- Overlays (breathing, weapon hold)
+
+We need a **generic approach** that handles all of these without special-casing each one.
 
 **Current state:**
 - Pose changes sync (crouch, glide, combat stance) ✅
 - Position/rotation sync ✅
-- Walk/run animations do NOT play — remote pawn slides in idle pose
+- Most animations do NOT play — remote pawn slides in idle pose
 
-**Required approach:**
-- Investigate `RAnimUtil_MovementPlayer` — this drives locomotion animation
-- Need to sync the movement animation state, not just poses
-- Options:
-  1. Sync `MovementPlayer` state directly (speed, direction, animation name)
-  2. Find the function that triggers locomotion anims and redirect it
-  3. Manually call `PlayAnim()` with the correct locomotion animation
+---
 
-**Deliverable**: Remote Batman walks, runs, crouches, glides — looks like a real player.
+**Two Candidate Approaches:**
+
+### Approach A: Sync Animation Output (Read what's playing)
+
+```
+LOCAL PAWN                              REMOTE PAWN
+    │                                        │
+    ▼                                        ▼
+Read active animations ──────────────► Apply via SetAnimPosition()
+(name + playback time)                  with bEnableRootMotion=false
+    │                                        │
+Position from network ───────────────► Set position directly
+```
+
+**Concept:** Read what animations are currently playing on the local pawn, sync the animation names and playback times, apply them directly on the remote pawn.
+
+**Pros:**
+- What you see is what you get — guaranteed visual match
+- Works regardless of game state differences
+- Position controlled by network, animation is purely visual
+
+**Cons:**
+- Need to figure out how to read active animations from AnimTree
+- Higher bandwidth (animation names + times, possibly continuous)
+- May miss blend states between animations
+
+**Key functions to investigate:**
+- `AnimNodeSlot.GetPlayedAnimation()` — returns current animation name
+- `AnimNodeSlot.bIsPlayingCustomAnim` — whether custom anim is active
+- `AnimNodeSequence.AnimSeqName` / `.CurrentTime` / `.bPlaying`
+- `SetAnimPosition(SlotName, Channel, AnimName, Time, bFireNotifies, bLooping, bEnableRootMotion)`
+
+**Investigation needed:**
+- [ ] How to enumerate active AnimNodeSlots on the mesh
+- [ ] What slots exist? (FullBody, UpperBody, etc.)
+- [ ] Does SetAnimPosition work well for gameplay (not just Matinee)?
+
+---
+
+### Approach B: Sync Controller Input (Replay player actions) ⭐ PREFERRED
+
+```
+LOCAL CONTROLLER                        REMOTE PAWN
+    │                                        │
+    ▼                                        ▼
+Read input state ────────────────────► Feed to pawn's input system
+(direction, buttons, events)            Game logic produces animations
+    │                                        │
+Position from network ───────────────► Override position (prevent drift)
+```
+
+**Concept:** Instead of syncing animation *output*, sync the *input* that causes animations. The game's existing systems handle all the complex animation logic.
+
+**Pros:**
+- Much lower bandwidth (inputs are sparse events, not continuous state)
+- Game's existing logic handles ALL animation complexity
+- Naturally handles every action (grapple, gadgets, traversal, etc.)
+- This is how real multiplayer games work
+- The game was *designed* for this — `simulated`/`reliable` markers exist for this purpose
+
+**Cons:**
+- Need to identify all relevant input state/events
+- Remote pawn needs fake input injection mechanism
+- Latency means animations start slightly late on remote
+- Remote pawn needs similar world context (nearby ledges, etc.)
+
+**What we'd sync:**
+| Input Type | Data | Frequency |
+|------------|------|-----------|
+| Movement direction | Vector2 (stick/WASD) | Continuous (~20Hz) |
+| Movement speed | Walk/Run modifier | On change |
+| Jump/Glide | Event | On press |
+| Grapple | Event + target point | On fire |
+| Gadget use | Event + gadget type | On use |
+| Crouch | Toggle event | On press |
+| Context action | Event (vault, vent, etc.) | On trigger |
+
+**Key insight:** All those `simulated` and `reliable server/client` function markers in the original code exist because the game was designed to sync inputs/events, not animations. We'd be using the architecture as intended.
+
+**Investigation needed:**
+- [ ] Where does RPlayerControllerCombat process movement input?
+- [ ] Can we inject fake input into a pawn without a real controller?
+- [ ] What events trigger grapple, gadgets, context actions?
+- [ ] How to handle world context (ledge detection, etc.) on remote?
+
+---
+
+### Hybrid Strategy
+
+Both approaches can coexist:
+1. **Position** always comes from network (authoritative)
+2. **Input sync** for initiating actions (Approach B)
+3. **Animation sync** as fallback for edge cases (Approach A)
+
+**Recommended starting point:** Investigate Approach B (input sync) first, as it's more elegant and lower bandwidth. Fall back to Approach A if input sync proves too complex.
+
+**Deliverable**: Remote Batman fully animates — walks, runs, glides, grapples, uses gadgets, traverses environment.
 
 ---
 
@@ -581,48 +677,106 @@ Scripts/
 
 ## Next Steps (Immediate)
 
-### Option A: Complete Locomotion Sync (Phase 1.4)
-To get walk/run animations working:
+### Phase 1.4: Animation Sync Investigation
 
-1. **Investigate `RAnimUtil_MovementPlayer`**
-   - [ ] Find how locomotion animations are triggered
-   - [ ] Check if there's a function we can redirect (not native)
-   - [ ] Understand the movement input → animation flow
+**Goal**: Determine the best approach for full animation sync, then implement it.
 
-2. **Sync locomotion animation state**
-   - [ ] Identify what state needs to be synced (anim name? speed? direction?)
-   - [ ] Create `LocomotionMessage` with required data
-   - [ ] Apply on remote pawn to trigger same animation
+#### Step 1: Investigate Input Sync (Approach B) — ✅ IMPLEMENTED
 
-3. **Handle root motion on remote**
-   - [ ] Remote pawn plays locomotion anim with root motion
-   - [ ] Reconcile root motion position with network position (may drift)
-   - [ ] Consider: disable root motion on remote, just play anim visually?
+1. **Explore RPlayerControllerCombat** ✅
+   - [x] Find where movement input is processed
+     - `PlayerMove()` → `MoveInDirection(newAccel)` where `newAccel = (PlayerInput.aForward * X) + (PlayerInput.aStrafe * Y)`
+   - [x] Identify the input variables (direction, speed modifier)
+     - `RPlayerInput`: `RawLeftX`, `RawLeftY`, `aForward`, `aStrafe`, button bools
+   - [x] Find event handlers for: Jump, Crouch, Grapple, Gadget, ContextAction
+     - In `RPlayerInput`: `bCrouchButton`, `aGrappleButton`, `bReadyGadgetButton`, etc.
 
-### Option B: Skip to Combat Sync (Phase 2)
-If locomotion proves too complex, move to combat animations:
+2. **Key Discovery: Game's built-in network infrastructure** ✅
+   - `NetworkMoveVector` exists on RPawnPlayer (line 701)
+   - `NetworkTick()` already calls `MoveInDirection(NetworkMoveVector * 0.01)` for remote pawns
+   - `DesiredPoseForReplication`, `AimDirectionForReplication` also exist
+   - Original netcode was cut before completion — we can use these ourselves!
 
-1. **Intercept combat moves**
-   - [ ] Test `[ComponentRedirect]` on `RCombatMove.OnInitialiseMulticast()`
-   - [ ] Create `CombatMoveMessage` with move class + anim data
-   - [ ] Spawn/play combat move on remote pawn
+3. **Prototype minimal input sync** ✅ DONE
+   - [x] Sync movement direction via `InputHeading()` → `MoveInDirection()`
+   - [x] Extended `ActorMoveMessage` with `MoveDirection` field
+   - [x] Remote pawn calls `MoveInDirection(_lastMoveDirection)`
+   - [x] Position correction to prevent drift (blend toward network position)
 
-2. **Custom animation slot sync**
-   - [ ] Find `PlayCustomAnim()` or similar on AnimNodeSlot
-   - [ ] Redirect and broadcast animation name + params
-   - [ ] Apply on remote via direct anim call
+#### Step 2: Fallback — Investigate Animation Sync (Approach A)
+
+If input sync doesn't work well:
+
+1. **Explore animation reading**
+   - [ ] Find AnimNodeSlots on the player mesh
+   - [ ] Test `GetPlayedAnimation()` on each slot
+   - [ ] Determine what info we can extract (anim name, time, blend weight)
+
+2. **Test SetAnimPosition**
+   - [ ] Try calling `SetAnimPosition()` on remote pawn
+   - [ ] Verify `bEnableRootMotion=false` works as expected
+   - [ ] Check visual quality (blending, transitions)
+
+#### Step 3: Implement chosen approach
+
+Once we know which approach works:
+- [ ] Create appropriate message types
+- [ ] Implement sender logic in NetPlayerComponent
+- [ ] Implement receiver logic
+- [ ] Test across all animation scenarios
+
+### After Animation Sync: Phase 2 (Combat Sync)
+Combat moves may need special handling via `RCombatMove` interception, or may work automatically if input sync covers attack/counter inputs.
 
 ### Current State Summary
 - ✅ Transform sync (position, rotation) at 20Hz with interpolation
 - ✅ Pose sync (crouch, glide, combat stance, gadget poses)
 - ✅ Physics state sync
-- ❌ Locomotion animations (walk/run) - remote slides in idle
+- ✅ Locomotion sync via `MoveInDirection()` (walk/run animations work)
 - ❌ Combat animations (strikes, evades, counters)
 - ❌ Custom animations (batarang throw, etc.)
 
 ---
 
 ## Session Learnings
+
+### 2026-03-22: Animation Sync Strategy Discussion
+
+**The Problem:**
+- Game has dozens of animation states: locomotion, gliding, grappling, gadgets, traversal, etc.
+- `MoveTo()` is for AI pathing, not player movement — wrong approach
+- Need a generic solution that handles ALL animations without special-casing each
+
+**Two Candidate Approaches Identified:**
+
+**Approach A: Sync Animation Output**
+- Read what animations are currently playing (name + time)
+- Apply via `SetAnimPosition()` with `bEnableRootMotion=false`
+- Pro: Guaranteed visual match
+- Con: Need to figure out how to read active animations, higher bandwidth
+
+**Approach B: Sync Controller Input** ⭐ PREFERRED
+- Sync the player's input (direction, buttons, events) instead of animation output
+- Remote pawn processes inputs → game logic produces correct animations
+- Pro: Lower bandwidth, handles all actions automatically, game designed for this
+- Con: Need to inject fake input, slight latency on animation start
+
+**Key Insight:**
+The `simulated` and `reliable server/client` markers throughout the codebase exist because the game was designed to sync inputs/events. We'd be using the architecture as originally intended.
+
+**What to sync for Approach B:**
+- Movement direction (Vector2) — continuous
+- Movement speed modifier — on change
+- Events: Jump, Crouch, Grapple(target), UseGadget, ContextAction
+
+**Hybrid strategy:**
+- Position always from network (authoritative)
+- Input sync for initiating actions
+- Animation sync as fallback for edge cases
+
+**Next step:** Investigate RPlayerControllerCombat to understand input processing.
+
+---
 
 ### 2026-03-22: Phase 1.3 Implementation
 
@@ -653,9 +807,23 @@ If locomotion proves too complex, move to combat animations:
    - ❌ Locomotion anims (walk/run) — need animation-level sync
    - ❌ Combat/evade anims — these use combat move system or custom anims
 
-**Next session priorities:**
-- Investigate `RAnimUtil_MovementPlayer` for locomotion sync
-- Or skip to Phase 2 (combat animation sync) if locomotion is too complex
+**Next:** Phase 2 — Combat animation sync (strikes, counters, evades)
+
+---
+
+### 2026-03-22: Locomotion Sync via Input Direction (Approach B) ✅
+
+**Solution:** Sync movement input direction, call `MoveInDirection()` on remote pawn.
+
+**Key details:**
+- `HasMovementInput()` check required — `InputHeading()` returns camera direction when no input!
+- `MoveInDirection()` handles both animation AND pawn facing — don't override rotation
+- Position correction (blend toward network pos) prevents root motion drift
+
+**Implementation:**
+- Local: `controller.HasMovementInput() ? Owner.InputHeading() : Vector3.Zero`
+- Remote: `Owner.MoveInDirection(_lastMoveDirection)` every tick
+- Extended `ActorMoveMessage` with `MoveDirection` field
 
 ---
 

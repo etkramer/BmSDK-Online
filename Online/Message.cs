@@ -11,7 +11,7 @@ public record class JoinMessage(string DisplayName, int NetId) : Message
     public override byte TypeId => 1;
 }
 
-public record class ActorMoveMessage(int NetId, Vector3 NewLocation, Rotator NewRotation) : Message
+public record class ActorMoveMessage(int NetId, Vector3 NewLocation, Rotator NewRotation, Vector3 MoveDirection) : Message
 {
     public override byte TypeId => 2;
 }

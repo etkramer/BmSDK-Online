@@ -55,9 +55,9 @@ public class NetworkManager
         _serverSocket = socket;
     }
 
-    public void BroadcastTransform(int netId, Vector3 location, Rotator rotation)
+    public void BroadcastTransform(int netId, Vector3 location, Rotator rotation, Vector3 moveDirection)
     {
-        var message = new ActorMoveMessage(netId, location, rotation);
+        var message = new ActorMoveMessage(netId, location, rotation, moveDirection);
         BroadcastMessage(message);
     }
 
@@ -107,7 +107,7 @@ public class NetworkManager
         var component = GetRemotePlayer(message.NetId);
         if (component != null)
         {
-            component.ReceiveTransform(message.NewLocation, message.NewRotation);
+            component.ReceiveTransform(message.NewLocation, message.NewRotation, message.MoveDirection);
         }
         else
         {
