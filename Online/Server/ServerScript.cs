@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Net.Sockets;
-using System.Numerics;
 using BmSDK.BmGame;
 using BmSDK.Engine;
+using Online.Components;
+using Online.Core;
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Online.Server;
@@ -28,15 +29,6 @@ public class ServerScript : Script
         base.OnKeyDown(key);
     }
 
-    public override void OnEnterGame()
-    {
-        // Add net components to various objects we want synced
-        var hostPawn = Game.GetPlayerPawn(0);
-        var hostPawnNet = hostPawn.AttachScriptComponent<NetComponent>();
-
-        base.OnEnterGame();
-    }
-
     public override void OnTick()
     {
         // Do nothing if not listening
@@ -55,7 +47,7 @@ public class ServerScript : Script
             return;
         }
 
-        // Check for new messages
+        // Check for new messages from clients
         foreach (var client in _clients)
         {
             lock (client.MessageQueue)
@@ -64,22 +56,16 @@ public class ServerScript : Script
             }
         }
 
-        // Update clients with new world state
-        foreach (var client in _clients)
-        {
-            var hostPawn = Game.GetPlayerPawn(0);
-            var hostPawnNet = hostPawn.GetScriptComponent<NetComponent>();
-
-            // Send new pawn location to client
-            var message = new ActorMoveMessage(hostPawnNet.NetId, hostPawn.Location, hostPawn.Rotation);
-            message.Send(client.Socket);
-        }
+        // Transform sync is now handled by NetPlayerComponent.OnTick()
 
         base.OnTick();
     }
 
     private void StartServer()
     {
+        // Initialize NetworkManager as server
+        NetworkManager.InitAsServer();
+
         // Find host
         var hostEndPoint = OnlineUtils.GetLocalEndPoint();
 
@@ -95,7 +81,7 @@ public class ServerScript : Script
         Game.GetWorldInfo().NetMode = WorldInfo.ENetMode.NM_ListenServer;
         Game.GetEngine().bPauseOnLossOfFocus = false;
 
-        Debug.Log($"Listening on port {hostEndPoint.Port}");
+        Debug.Log($"[Server] Listening on port {hostEndPoint.Port}");
     }
 
     private void OnSocketAccept(IAsyncResult result)
@@ -103,11 +89,14 @@ public class ServerScript : Script
         // Finish async accept
         var newSocket = _socket.EndAccept(result);
 
-        Debug.Log($"Connected to client {newSocket.RemoteEndPoint}");
+        Debug.Log($"[Server] Client connected: {newSocket.RemoteEndPoint}");
 
         // Register connected client
         var client = new ServerClientConnection(newSocket);
         _clients.Add(client);
+
+        // Register socket with NetworkManager for broadcasting
+        NetworkManager.Instance?.AddClientSocket(newSocket);
 
         // Resume listening
         _socket.BeginAccept(OnSocketAccept, null);

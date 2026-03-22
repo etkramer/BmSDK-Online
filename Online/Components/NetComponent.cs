@@ -1,30 +1,20 @@
-﻿using Online.Server;
+﻿namespace Online.Components;
 
-namespace Online;
-
-public class NetComponent : ScriptComponent
+/// <summary>
+/// Base class for networked components. Provides NetId for identification.
+/// See NetPlayerComponent for player-specific sync logic.
+/// </summary>
+public abstract class NetComponent : ScriptComponent
 {
-    public int NetId { get; private set; } = -1;
+    public int NetId { get; protected set; } = -1;
 
-    public NetComponent()
+    protected NetComponent()
     {
-        NetId = BitConverter.ToInt32(Guid.NewGuid().ToByteArray());
+        NetId = BitConverter.ToInt32(Guid.NewGuid().ToByteArray(), 0);
     }
 
-    public override void OnAttach()
+    public void SetNetId(int netId)
     {
-        // TODO:
-        // Server: send ActorSpawnMessage to all clients
-        // Client: send ActorSpawnMessage to server (which forwards it to other clients)
-
-        base.OnAttach();
-    }
-
-    public override void OnTick()
-    {
-        // TODO:
-        // Server: send new actor position to all clients
-
-        base.OnTick();
+        NetId = netId;
     }
 }

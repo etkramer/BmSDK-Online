@@ -25,7 +25,7 @@ This is a C# mod adding online multiplayer to Batman: Arkham City using the BmSD
 
 | Game Class | Purpose |
 |------------|---------|
-| `RPawnPlayerBm` | Player pawn (Batman/Catwoman/etc) |
+| `RPawnPlayerCombat` | Player pawn (Batman/Catwoman/etc) |
 | `RPawnCharacter` | Base with `ChangePose()` for animations |
 | `RAnimNode_Pose` | Animation state machine |
 | `RCombatMove` | Base class for all combat moves |

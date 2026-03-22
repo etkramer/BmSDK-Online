@@ -2,6 +2,8 @@
 using BmSDK.BmGame;
 using BmSDK.BmScript;
 using BmSDK.Engine;
+using Online.Components;
+using Online.Core;
 
 namespace Online.Client;
 
@@ -10,9 +12,6 @@ public class ClientScript : Script
 {
     private Socket _socket = null;
     private ClientServerConnection _connection = null;
-
-    // TEMP
-    public static RPawnPlayerBm HostPawn = null;
 
     public override void OnKeyDown(Keys key)
     {
@@ -32,38 +31,31 @@ public class ClientScript : Script
             return;
         }
 
-        // Check for new messages
+        // Check for new messages from server
         lock (_connection.MessageQueue)
         {
             _connection.ProcessMessages();
         }
 
+        // Transform sync is now handled by NetPlayerComponent.OnTick()
+
         base.OnTick();
-    }
-
-    // TEMP
-    private static void SpawnHostPawn()
-    {
-        var gameInfo = Game.GetGameInfo();
-        var playerStart = gameInfo.FindPlayerStart(Game.GetPlayerController(0));
-
-        HostPawn = Game.SpawnActor<RPawnPlayerBm>(playerStart.Location, playerStart.Rotation);
     }
 
     private void StartClient()
     {
+        // Initialize NetworkManager as client
+        NetworkManager.InitAsClient();
+
         // Create client socket
         _socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
         // Connect to host (non-blocking)
-        Debug.Log("Connecting to server...");
+        Debug.Log("[Client] Connecting to server...");
         _socket.BeginConnect(OnlineUtils.GetLocalEndPoint(), OnSocketConnect, null);
 
         // Disable pausing on focus loss
         Game.GetEngine().bPauseOnLossOfFocus = false;
-
-        // TEMP
-        SpawnHostPawn();
     }
 
     private void OnSocketConnect(IAsyncResult result)
@@ -71,13 +63,18 @@ public class ClientScript : Script
         // Finish async connect
         _socket.EndConnect(result);
 
-        Debug.Log($"Connected to server {_socket.RemoteEndPoint}");
+        Debug.Log($"[Client] Connected to server {_socket.RemoteEndPoint}");
+
+        // Register socket with NetworkManager
+        NetworkManager.Instance?.SetServerSocket(_socket);
 
         // Create new connection object
         _connection = new ClientServerConnection(_socket);
 
-        // Send "join" message to server
-        var joinMessage = new JoinMessage("SomeUser");
+        // Send "join" message to server (includes our local player's NetId)
+        var localPawn = (RPawnPlayerCombat)Game.GetPlayerPawn(0);
+        var localComponent = localPawn?.GetScriptComponent<NetPlayerComponent>();
+        var joinMessage = new JoinMessage("Player", localComponent?.NetId ?? 0);
         joinMessage.Send(_socket);
     }
 }

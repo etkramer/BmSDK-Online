@@ -36,9 +36,9 @@ UE3's built-in replication system is present but broken beyond repair:
 BmSDK provides powerful hooking capabilities via `ScriptComponent`:
 
 ```csharp
-// AutoAttach: Component automatically attaches to ALL instances of RPawnPlayerBm
-[ScriptComponent(AutoAttach = typeof(RPawnPlayerBm))]
-public class NetPlayerComponent : ScriptComponent<RPawnPlayerBm>
+// AutoAttach: Component automatically attaches to ALL instances of RPawnPlayerCombat
+[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]
+public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     public int NetId { get; private set; }
     public bool IsLocal => Actor == Game.GetPlayerPawn(0);
@@ -86,15 +86,15 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerBm>
 **Goal**: Remote player appears as a fully animated character, not a sliding mesh.
 
 #### 1.1 Core Component Setup
-- [ ] Create `NetPlayerComponent` with `[ScriptComponent(AutoAttach = typeof(RPawnPlayerBm))]`
+- [ ] Create `NetPlayerComponent` with `[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]`
 - [ ] Implement `IsLocal` / `IsRemote` detection
 - [ ] Verify AutoAttach works on both local player and spawned remote pawns
 - [ ] Set up NetId assignment (local from GUID, remote from spawn message)
 
 #### 1.2 Transform Sync via Component
 ```csharp
-[ScriptComponent(AutoAttach = typeof(RPawnPlayerBm))]
-public class NetPlayerComponent : ScriptComponent<RPawnPlayerBm>
+[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]
+public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     private InterpolationBuffer _posBuffer = new(capacity: 5);
 
@@ -494,8 +494,8 @@ simulated event SetAnimPosition(...)               // Matinee anim control
 3. **Direct state comparison** — only send when state actually changes
 
 ```csharp
-[ScriptComponent(AutoAttach = typeof(RPawnPlayerBm))]
-public class NetPlayerComponent : ScriptComponent<RPawnPlayerBm>
+[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]
+public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
     private FName _lastMovementStance;
     private FName _lastWeaponStance;
@@ -576,7 +576,7 @@ Scripts/
 │   │   └── ...
 │   │
 │   ├── Components/                 # THE CORE SYNC SYSTEM
-│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerBm] - transform, pose, cape
+│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerCombat] - transform, pose, cape
 │   │   ├── NetCombatComponent.cs   # [AutoAttach=RCombatMove] - combat sync
 │   │   ├── NetEnemyComponent.cs    # [AutoAttach=RPawnVillain] - enemy state (Phase 3)
 │   │   └── NetComponent.cs         # Base with NetId (existing)
@@ -609,7 +609,7 @@ Scripts/
    - [ ] Identify which functions are `native` (can't redirect) vs UnrealScript
 
 2. **Create NetPlayerComponent with AutoAttach**
-   - [ ] `[ScriptComponent(AutoAttach = typeof(RPawnPlayerBm))]`
+   - [ ] `[ScriptComponent(AutoAttach = typeof(RPawnPlayerCombat))]`
    - [ ] Verify it attaches to local player on game start
    - [ ] Verify it attaches to spawned remote pawns
    - [ ] Implement `IsLocal` / `IsRemote` detection

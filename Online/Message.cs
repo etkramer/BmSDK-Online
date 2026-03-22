@@ -1,21 +1,22 @@
 ﻿using System.Net.Sockets;
+using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using BmSDK;
 
 namespace Online;
 
-public record class JoinMessage(string DisplayName) : Message
+public record class JoinMessage(string DisplayName, int NetId) : Message
 {
     public override byte TypeId => 1;
 }
 
-public record class ActorMoveMessage(int NetId, GameObject.FVector NewLocation, GameObject.FRotator NewRotation) : Message
+public record class ActorMoveMessage(int NetId, Vector3 NewLocation, Rotator NewRotation) : Message
 {
     public override byte TypeId => 2;
 }
 
-public record class ActorSpawnMessage(int NetId, string ActorClass, GameObject.FVector Location, GameObject.FRotator Rotation) : Message
+public record class ActorSpawnMessage(int NetId, string ActorClass, Vector3 Location, Rotator Rotation) : Message
 {
     public override byte TypeId => 3;
 }
