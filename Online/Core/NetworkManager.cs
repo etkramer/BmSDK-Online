@@ -41,6 +41,18 @@ public class NetworkManager
         _remotePlayers.Remove(netId);
     }
 
+    public void DestroyAllRemotePlayers()
+    {
+        foreach (var component in _remotePlayers.Values)
+        {
+            var pawn = component.Owner;
+            if (pawn == null) continue;
+            pawn.Controller?.Destroy();
+            pawn.Destroy();
+        }
+        _remotePlayers.Clear();
+    }
+
     public NetPlayerComponent GetRemotePlayer(int netId)
     {
         return _remotePlayers.GetValueOrDefault(netId);
@@ -51,9 +63,19 @@ public class NetworkManager
         _clientSockets.Add(socket);
     }
 
+    public void RemoveClientSocket(Socket socket)
+    {
+        _clientSockets.Remove(socket);
+    }
+
     public void SetServerSocket(Socket socket)
     {
         _serverSocket = socket;
+    }
+
+    public static void Shutdown()
+    {
+        Instance = null;
     }
 
     public void BroadcastTransform(int netId, Vector3 location, Rotator rotation, Vector3 moveDirection, Rotator controllerRotation)

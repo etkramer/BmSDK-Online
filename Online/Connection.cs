@@ -8,6 +8,7 @@ public abstract class Connection
 {
     public Socket Socket { get; private set; }
     public Queue<Message> MessageQueue { get; private set; } = new();
+    public volatile bool IsConnected = true;
 
     private readonly byte[] messageBuffer = new byte[Message.BufferSize];
 
@@ -17,6 +18,14 @@ public abstract class Connection
 
         // Start listening for messages
         Socket.BeginReceive(messageBuffer, 0, messageBuffer.Length, SocketFlags.None, OnSocketRecieve, Socket);
+    }
+
+    public void Close()
+    {
+        if (!IsConnected) return;
+        IsConnected = false;
+        try { Socket.Shutdown(SocketShutdown.Both); } catch { }
+        Socket.Close();
     }
 
     public void ProcessMessages()
@@ -37,8 +46,27 @@ public abstract class Connection
     {
         lock (MessageQueue)
         {
-            // Recieve data from client
-            Socket.EndReceive(result);
+            int bytesRead;
+            try
+            {
+                bytesRead = Socket.EndReceive(result);
+            }
+            catch (SocketException)
+            {
+                IsConnected = false;
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
+            if (bytesRead == 0)
+            {
+                IsConnected = false;
+                return;
+            }
+
             Span<byte> data = messageBuffer.AsSpan();
 
             // Extract type id and json data (null terminated)

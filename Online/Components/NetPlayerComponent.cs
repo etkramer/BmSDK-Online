@@ -13,8 +13,7 @@ namespace Online.Components;
 [ScriptComponent(AutoAttach = true)]
 public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 {
-    private const double SendRateHz = 20.0;
-    private const double SendInterval = 1.0 / SendRateHz;
+    private const double SendInterval = 1.0 / OnlineUtils.TickRate;
 
     public int NetId { get; private set; } = -1;
     public bool IsLocal => Owner == Game.GetPlayerPawn(0);
@@ -23,6 +22,10 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
     private readonly InterpolationBuffer _interpolationBuffer = new();
     private readonly Stopwatch _sendTimer = Stopwatch.StartNew();
     private double _gameTime = 0;
+
+    // Input sync for locomotion
+    private Vector3 _lastMoveDirection;
+    private Rotator _lastControllerRotation;
 
     public NetPlayerComponent()
     {
@@ -79,41 +82,42 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
     private void HandleRemoteTick()
     {
-        if (!_interpolationBuffer.HasData)
+        // Interpolate toward latest received position
+        var (position, rotation) = _interpolationBuffer.Interpolate(_gameTime);
+
+        // Only update if we have valid data
+        if (position.X != 0 || position.Y != 0 || position.Z != 0)
         {
-            return;
+            // Always call MoveInDirection - it handles both movement animation AND facing
+            // Zero vector = stop moving, non-zero = walk/run in that direction
+            Owner.MoveInDirection(_lastMoveDirection);
+
+            // Apply the sender's look direction to the remote controller
+            if (Owner.Controller is RPlayerControllerCombat remoteController)
+            {
+                remoteController.SetRotation(_lastControllerRotation);
+            }
+
+            // Correct position to prevent drift from root motion
+            var currentPos = Owner.Location;
+            var posDiff = position - currentPos;
+
+            if (posDiff.LengthSquared() > 10000) // ~100 units - snap
+            {
+                Owner.Location = position;
+                Owner.Rotation = rotation;
+            }
+            else
+            {
+                Owner.Location = position;
+            }
         }
-
-        // All four values are buffered together so they stay in sync
-        var (position, rotation, controllerRotation, moveDirection) = _interpolationBuffer.Interpolate(_gameTime);
-
-        // Apply the sender's look direction to the remote controller
-        if (Owner.Controller is RPlayerControllerCombat remoteController)
-        {
-            remoteController.SetRotation(controllerRotation);
-        }
-
-        Owner.MoveInDirection(moveDirection);
-
-        // Position correction: use a dead-zone so we don't fight physics-driven
-        // movement (gliding, climbing, falling) on every frame.
-        var posDiff = position - Owner.Location;
-        float driftSq = posDiff.LengthSquared();
-
-        if (driftSq > 10000) // >~100 units: hard snap, also fix rotation
-        {
-            Owner.Location = position;
-            Owner.Rotation = rotation;
-        }
-        else if (driftSq > 25) // >~5 units: correct drift
-        {
-            Owner.Location = position;
-        }
-        // else: within tolerance — let physics/animation own the position
     }
 
     public void ReceiveTransform(Vector3 position, Rotator rotation, Vector3 moveDirection, Rotator controllerRotation)
     {
-        _interpolationBuffer.AddSnapshot(position, rotation, controllerRotation, moveDirection, _gameTime);
+        _interpolationBuffer.AddSnapshot(position, rotation, _gameTime);
+        _lastMoveDirection = moveDirection;
+        _lastControllerRotation = controllerRotation;
     }
 }

@@ -5,6 +5,8 @@ namespace Online;
 
 public static class OnlineUtils
 {
+    public const double TickRate = 60;
+
     public static IPEndPoint GetLocalEndPoint()
     {
         return new IPEndPoint(IPAddress.Loopback, 8888);

@@ -11,8 +11,7 @@ namespace Online.Server;
 [Script]
 public class ServerScript : Script
 {
-    public const double TickRate = 60;
-    public const double TickIntervalSeconds = 1.0 / TickRate;
+    public const double TickIntervalSeconds = 1.0 / OnlineUtils.TickRate;
 
     private Socket _socket = null;
     private readonly List<ServerClientConnection> _clients = [];
@@ -27,6 +26,22 @@ public class ServerScript : Script
         }
 
         base.OnKeyDown(key);
+    }
+
+    public override void OnUnload()
+    {
+        NetworkManager.Instance?.DestroyAllRemotePlayers();
+
+        foreach (var client in _clients)
+            client.Close();
+        _clients.Clear();
+
+        _socket?.Close();
+        _socket = null;
+
+        NetworkManager.Shutdown();
+
+        base.OnUnload();
     }
 
     public override void OnTick()
@@ -47,6 +62,16 @@ public class ServerScript : Script
             return;
         }
 
+        // Clean up disconnected clients
+        for (int i = _clients.Count - 1; i >= 0; i--)
+        {
+            if (!_clients[i].IsConnected)
+            {
+                HandleClientDisconnect(_clients[i]);
+                _clients.RemoveAt(i);
+            }
+        }
+
         // Check for new messages from clients
         foreach (var client in _clients)
         {
@@ -59,6 +84,22 @@ public class ServerScript : Script
         // Transform sync is now handled by NetPlayerComponent.OnTick()
 
         base.OnTick();
+    }
+
+    private void HandleClientDisconnect(ServerClientConnection client)
+    {
+        Debug.Log($"[Server] Client disconnected: \"{client.DisplayName}\" (NetId={client.ClientNetId})");
+
+        NetworkManager.Instance?.RemoveClientSocket(client.Socket);
+
+        var playerComponent = NetworkManager.Instance?.GetRemotePlayer(client.ClientNetId);
+        if (playerComponent?.Owner is RPawnPlayerCombat pawn)
+        {
+            pawn.Controller?.Destroy();
+            pawn.Destroy();
+        }
+
+        NetworkManager.Instance?.UnregisterRemotePlayer(client.ClientNetId);
     }
 
     private void StartServer()
@@ -85,8 +126,21 @@ public class ServerScript : Script
 
     private void OnSocketAccept(IAsyncResult result)
     {
-        // Finish async accept
-        var newSocket = _socket.EndAccept(result);
+        Socket newSocket;
+        try
+        {
+            newSocket = _socket?.EndAccept(result);
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+        catch (SocketException)
+        {
+            return;
+        }
+
+        if (newSocket == null) return;
 
         Debug.Log($"[Server] Client connected: {newSocket.RemoteEndPoint}");
 
@@ -95,6 +149,10 @@ public class ServerScript : Script
         _clients.Add(client);
 
         // Resume listening
-        _socket.BeginAccept(OnSocketAccept, null);
+        try
+        {
+            _socket.BeginAccept(OnSocketAccept, null);
+        }
+        catch (ObjectDisposedException) { }
     }
 }

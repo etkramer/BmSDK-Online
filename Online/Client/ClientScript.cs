@@ -23,11 +23,33 @@ public class ClientScript : Script
         base.OnKeyDown(key);
     }
 
+    public override void OnUnload()
+    {
+        NetworkManager.Instance?.DestroyAllRemotePlayers();
+
+        _connection?.Close();
+        _connection = null;
+        _socket = null;
+
+        NetworkManager.Shutdown();
+
+        base.OnUnload();
+    }
+
     public override void OnTick()
     {
         // Do nothing if not connected
         if (_connection == null)
         {
+            return;
+        }
+
+        // Handle server disconnect
+        if (!_connection.IsConnected)
+        {
+            Debug.Log("[Client] Server disconnected");
+            _connection = null;
+            _socket = null;
             return;
         }
 
@@ -60,8 +82,14 @@ public class ClientScript : Script
 
     private void OnSocketConnect(IAsyncResult result)
     {
-        // Finish async connect
-        _socket.EndConnect(result);
+        try
+        {
+            _socket?.EndConnect(result);
+        }
+        catch (ObjectDisposedException) { return; }
+        catch (SocketException) { return; }
+
+        if (_socket == null) return;
 
         Debug.Log($"[Client] Connected to server {_socket.RemoteEndPoint}");
 
