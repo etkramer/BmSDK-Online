@@ -432,10 +432,9 @@ Combat moves override the pose system:
 |-------|-----------------|------|
 | Position | 60Hz | 12 bytes |
 | Rotation | 60Hz | 12 bytes |
-| Pose (stance names) | On change | ~24 bytes |
-| Physics state | On change | 1 byte |
-| Combat move | On change | ~32 bytes |
-| Cape state | On change | ~8 bytes |
+| Input state | 60Hz | ~32 bytes |
+| Controller state | On change | ~32 bytes |
+| Pawn state | On change | ~32 bytes |
 
 **Estimated bandwidth**: ~2-3 KB/sec per player at 60 tick
 
@@ -458,12 +457,6 @@ Combat moves override the pose system:
 0x0B - InteractMessage       (Phase 4)
 ```
 
-### Delta Compression (Future)
-For high-frequency updates, send deltas:
-- Position delta from last confirmed
-- Only send changed stance names
-- Bitfield for boolean flags
-
 ---
 
 ## Risks & Mitigations
@@ -473,11 +466,7 @@ For high-frequency updates, send deltas:
 | Key functions are `native` (can't redirect) | Medium | High | Fall back to OnTick polling for those functions |
 | ComponentRedirect causes infinite loop | Medium | High | Always check `IsLocal` before broadcasting |
 | AutoAttach timing issues | Low | Medium | Manual attach fallback in OnEnterGame |
-| AnimTree doesn't init on spawned pawn | Medium | High | Use direct `PlayAnim()` fallback |
-| Combat moves require PlayerController | Medium | High | Test extensively; may need stub controller |
 | Latency causes combat desync | High | Medium | Visual-only combat on client; host authority |
-| Cape physics desync | Low | Low | Sync cape state, not physics |
-| Memory/perf with multiple pawns | Low | Medium | Profile early; limit particle effects |
 
 ### Native vs UnrealScript Function Check
 Before relying on redirect, verify each function. In the reference `.uc` files:
@@ -529,14 +518,12 @@ Scripts/
 │   │   ├── Message.cs              # Base class (existing)
 │   │   ├── JoinMessage.cs          # Player join handshake
 │   │   ├── TransformMessage.cs     # Position + rotation
-│   │   ├── PoseChangeMessage.cs    # Animation stance change
 │   │   ├── CombatMoveMessage.cs    # Combat move start/end
-│   │   ├── CapeStateMessage.cs     # Cape transitions
 │   │   └── ...
 │   │
 │   ├── Components/                 # THE CORE SYNC SYSTEM
-│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerCombat] - transform, locomotion
-│   │   ├── NetControllerComponent.cs # [AutoAttach=RPlayerControllerCombat] - controller state sync
+│   │   ├── NetPlayerComponent.cs   # [AutoAttach=RPawnPlayerCombat] - transform, forced correction updates
+│   │   ├── NetControllerComponent.cs # [AutoAttach=RPlayerControllerCombat] - controller input/state sync (drives locomotion)
 │   │   ├── NetCombatComponent.cs   # [AutoAttach=RCombatMove] - combat sync (TODO)
 │   │   ├── NetEnemyComponent.cs    # [AutoAttach=RPawnVillain] - enemy state (Phase 3)
 │   │   └── NetComponent.cs         # Base with NetId (existing)
@@ -611,8 +598,6 @@ Combat moves may need special handling via `RCombatMove` interception, or may wo
 - `MoveTo()` is for AI pathing, not player movement — wrong approach
 - Need a generic solution that handles ALL animations without special-casing each
 
-**Two Candidate Approaches Identified:**
-
 **Chosen Approach: Sync Controller Input**
 - Sync the player's input (direction, buttons, events) instead of animation output
 - Remote pawn processes inputs → game logic produces correct animations
@@ -633,51 +618,6 @@ The `simulated` and `reliable server/client` markers throughout the codebase exi
 - Animation sync as fallback for edge cases
 
 **Next step:** Investigate RPlayerControllerCombat to understand input processing.
-
----
-
-### 2026-03-22: Locomotion Sync via Input Direction (Approach B) ✅
-
-**Solution:** Sync movement input direction, call `MoveInDirection()` on remote pawn.
-
-**Key details:**
-- `HasMovementInput()` check required — `InputHeading()` returns camera direction when no input!
-- `MoveInDirection()` handles both animation AND pawn facing — don't override rotation
-- Position correction (blend toward network pos) prevents root motion drift
-
-**Implementation:**
-- Local: `controller.HasMovementInput() ? Owner.InputHeading() : Vector3.Zero`
-- Remote: `Owner.MoveInDirection(_lastMoveDirection)` every tick
-- Extended `ActorMoveMessage` with `MoveDirection` field
-
----
-
-### 2026-03-22: Controller State Sync ✅
-
-**Goal:** Sync controller states (WalkingMode, RunningMode, StealthMoveMode) so remote pawns run/crouch correctly.
-
-**Architecture:**
-- Remote pawns now have their own `RPlayerControllerCombat` (spawned and possessed during `HandleActorSpawn`)
-- `NetControllerComponent` auto-attaches to all `RPlayerControllerCombat` instances
-- Uses `[ComponentRedirect]` on `BeginState` to intercept state changes
-- When local controller enters a new state, broadcasts `ControllerStateMessage`
-- Remote controller receives and calls `GotoState(stateName)`
-
-**Key States Synced:**
-- `WalkingMode` — Normal walking (calls `SetWalkSpeed()`)
-- `RunningMode` — Running (calls `SetRunSpeed()`)
-- `StealthMoveMode` — Crouching (calls `SetStealthSpeed()`, changes pose to 'Crouching')
-
-**Why this approach:**
-- The controller's state machine handles ALL state-specific logic (speed, pose, camera, etc.)
-- We just sync the state name, and the game does the rest
-- Much cleaner than syncing individual properties
-
-**Files Added/Modified:**
-- `NetControllerComponent.cs` — New component for controller state sync
-- `ControllerStateMessage` — New message type (TypeId=4)
-- `NetworkManager.cs` — Added controller spawning and state handling
-- `Connection.cs`, `ClientServerConnection.cs`, `ServerClientConnection.cs` — Message routing
 
 ---
 

@@ -30,6 +30,7 @@ public record class ActorSpawnMessage(int NetId, string ActorClass, Vector3 Loca
 public record class PlayerInputMessage(
     int NetId,
     float AForward,
+    float ABaseY,
     float AStrafe,
     byte BCrouchButton,
     byte BRunButton,

@@ -4,7 +4,11 @@
       "Read(//e/Games/BatmanArkhamCity/BmGame/ScriptsDev/**)",
       "Read(//c/Users/elitk/Desktop/Batman2/**)",
       "Bash(dotnet build:*)",
-      "Bash(grep -rn function.*InputHeading C:/Users/elitk/Desktop/Batman2/)"
+      "Bash(grep -rn function.*InputHeading C:/Users/elitk/Desktop/Batman2/)",
+      "Bash(head -10 grep -rn \"bGadgetSelectLeft\\\\|bGadgetSelectRight\" \"C:\\\\Users\\\\elitk\\\\Desktop\\\\Batman2\\\\BmGame\\\\Classes\" \")",
+      "Bash(grep -i \"=Grapple$\\\\|=GrappleOrGadget\\\\b\\\\|=GrappleOrGadgetOrQuickStrike\" \"E:\\\\Games\\\\BatmanArkhamCity\\\\BmGame\\\\Config\\\\DefaultInput.ini\")",
+      "Bash(grep \"=Gadget$\\\\|=Gadget,\" \"E:\\\\Games\\\\BatmanArkhamCity\\\\BmGame\\\\Config\\\\BmInput.ini\")",
+      "Bash(xargs grep:*)"
     ]
   }
 }

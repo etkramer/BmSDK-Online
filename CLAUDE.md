@@ -18,7 +18,7 @@ This is a C# mod adding online multiplayer to Batman: Arkham City using the BmSD
 
 - UE3's built-in replication is broken (NetIndex removed), so we use custom TCP networking
 - The game has `simulated`, `reliable server/client` markers — designed for multiplayer that was cut
-- Our approach: call the same `simulated` functions the original netcode would have
+- Our approach: call the same `simulated` functions the original netcode would have. Prefer simulating controller input over performing actions on the pawn.
 - Host runs authoritative game state; clients render remote players visually
 
 ## Key Classes
@@ -26,8 +26,6 @@ This is a C# mod adding online multiplayer to Batman: Arkham City using the BmSD
 | Game Class | Purpose |
 |------------|---------|
 | `RPawnPlayerCombat` | Player pawn (Batman/Catwoman/etc) |
-| `RPawnCharacter` | Base with `ChangePose()` for animations |
-| `RAnimNode_Pose` | Animation state machine |
 | `RCombatMove` | Base class for all combat moves |
 | `RPawnCombat.FDamageInfo` | Damage data structure |
 

@@ -94,6 +94,7 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
         NetworkManager.Instance?.BroadcastPlayerInput(
             NetId,
             playerInput.aForward,
+            playerInput.aBaseY,
             playerInput.aStrafe,
             playerInput.bCrouchButton,
             playerInput.bRunButton,
@@ -109,7 +110,7 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
     /// Called when receiving input values from the network.
     /// Sets the input values directly, letting the controller handle state transitions.
     /// </summary>
-    public void ReceivePlayerInput(float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
+    public void ReceivePlayerInput(float aForward, float aBaseY, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
     {
         if (!IsRemote)
         {
@@ -123,6 +124,7 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
         }
 
         playerInput.aForward = aForward;
+        playerInput.aBaseY = aBaseY;
         playerInput.aStrafe = aStrafe;
         playerInput.bCrouchButton = bCrouchButton;
         playerInput.bRunButton = bRunButton;
@@ -190,12 +192,8 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
     void GrapplePressed() => ForwardExecEvent(nameof(RPlayerControllerCombat.GrapplePressed), Owner.GrapplePressed);
     [ComponentRedirect(nameof(RPlayerControllerCombat.GrappleReleased))]
     void GrappleReleased() => ForwardExecEvent(nameof(RPlayerControllerCombat.GrappleReleased), Owner.GrappleReleased);
-    [ComponentRedirect(nameof(RPlayerControllerCombat.FireGrapple))]
-    void FireGrapple() => ForwardExecEvent(nameof(RPlayerControllerCombat.FireGrapple), Owner.FireGrapple);
     [ComponentRedirect(nameof(RPlayerControllerCombat.AimGrapple))]
     void AimGrapple() => ForwardExecEvent(nameof(RPlayerControllerCombat.AimGrapple), Owner.AimGrapple);
-    [ComponentRedirect(nameof(RPlayerControllerCombat.GrappleOrGadgetPressed))]
-    void GrappleOrGadgetPressed() => ForwardExecEvent(nameof(RPlayerControllerCombat.GrappleOrGadgetPressed), Owner.GrappleOrGadgetPressed);
 
     [ComponentRedirect(nameof(RPlayerControllerCombat.StartRun))]
     void StartRun() => ForwardExecEvent(nameof(RPlayerControllerCombat.StartRun), Owner.StartRun);
@@ -226,6 +224,13 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
 
     [ComponentRedirect(nameof(RPlayerControllerCombat.TriggerBlockBreaker))]
     void TriggerBlockBreaker() => ForwardExecEvent(nameof(RPlayerControllerCombat.TriggerBlockBreaker), Owner.TriggerBlockBreaker);
+    [ComponentRedirect(nameof(RPlayerControllerCombat.BlockBreakerReleased))]
+    void BlockBreakerReleased() => ForwardExecEvent(nameof(RPlayerControllerCombat.BlockBreakerReleased), Owner.BlockBreakerReleased);
+
+    [ComponentRedirect(nameof(RPlayerControllerCombat.ReadyGadgetOrCounterReleased))]
+    void ReadyGadgetOrCounterReleased() => ForwardExecEvent(nameof(RPlayerControllerCombat.ReadyGadgetOrCounterReleased), Owner.ReadyGadgetOrCounterReleased);
+    [ComponentRedirect(nameof(RPlayerControllerCombat.UnReadyGadget))]
+    void UnReadyGadget() => ForwardExecEvent(nameof(RPlayerControllerCombat.UnReadyGadget), Owner.UnReadyGadget);
 
     [ComponentRedirect(nameof(RPlayerControllerCombat.QuickBatarang))]
     void QuickBatarang() => ForwardExecEvent(nameof(RPlayerControllerCombat.QuickBatarang), Owner.QuickBatarang);

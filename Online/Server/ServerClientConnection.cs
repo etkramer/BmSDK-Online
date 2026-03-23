@@ -100,6 +100,7 @@ public class ServerClientConnection : Connection
                 var inputMessage = new PlayerInputMessage(
                     hostComponent.NetId,
                     hostInput.aForward,
+                    hostInput.aBaseY,
                     hostInput.aStrafe,
                     hostInput.bCrouchButton,
                     hostInput.bRunButton,

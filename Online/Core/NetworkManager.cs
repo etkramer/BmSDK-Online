@@ -62,9 +62,9 @@ public class NetworkManager
         BroadcastMessage(message);
     }
 
-    public void BroadcastPlayerInput(int netId, float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
+    public void BroadcastPlayerInput(int netId, float aForward, float aBaseY, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
     {
-        var message = new PlayerInputMessage(netId, aForward, aStrafe, bCrouchButton, bRunButton, inputHeading, bReadyGadgetButton, aGrappleButton, aTurn, aLookUp);
+        var message = new PlayerInputMessage(netId, aForward, aBaseY, aStrafe, bCrouchButton, bRunButton, inputHeading, bReadyGadgetButton, aGrappleButton, aTurn, aLookUp);
         BroadcastMessage(message);
     }
 
@@ -134,6 +134,7 @@ public class NetworkManager
             var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
             controllerComponent?.ReceivePlayerInput(
                 message.AForward,
+                message.ABaseY,
                 message.AStrafe,
                 message.BCrouchButton,
                 message.BRunButton,
