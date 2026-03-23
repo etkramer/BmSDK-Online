@@ -3,7 +3,8 @@
     "allow": [
       "Read(//e/Games/BatmanArkhamCity/BmGame/ScriptsDev/**)",
       "Read(//c/Users/elitk/Desktop/Batman2/**)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(grep -rn function.*InputHeading C:/Users/elitk/Desktop/Batman2/)"
     ]
   }
 }

@@ -32,6 +32,7 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
 
     // Input sync for locomotion
     private Vector3 _lastMoveDirection;
+    private Rotator _lastControllerRotation;
 
     public NetPlayerComponent()
     {
@@ -81,8 +82,9 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
             ? Owner.InputHeading()
             : Vector3.Zero;
 
-        // Broadcast position and movement input to network
-        NetworkManager.Instance?.BroadcastTransform(NetId, Owner.Location, Owner.Rotation, moveDirection);
+        // Broadcast position, movement input, and look direction to network
+        var controllerRotation = controller?.Rotation ?? default;
+        NetworkManager.Instance?.BroadcastTransform(NetId, Owner.Location, Owner.Rotation, moveDirection, controllerRotation);
     }
 
     private void HandleRemoteTick()
@@ -96,6 +98,12 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
             // Always call MoveInDirection - it handles both movement animation AND facing
             // Zero vector = stop moving, non-zero = walk/run in that direction
             Owner.MoveInDirection(_lastMoveDirection);
+
+            // Apply the sender's look direction to the remote controller
+            if (Owner.Controller is RPlayerControllerCombat remoteController)
+            {
+                remoteController.SetRotation(_lastControllerRotation);
+            }
 
             // Correct position to prevent drift from root motion
             var currentPos = Owner.Location;
@@ -113,9 +121,10 @@ public class NetPlayerComponent : ScriptComponent<RPawnPlayerCombat>
         }
     }
 
-    public void ReceiveTransform(Vector3 position, Rotator rotation, Vector3 moveDirection)
+    public void ReceiveTransform(Vector3 position, Rotator rotation, Vector3 moveDirection, Rotator controllerRotation)
     {
         _interpolationBuffer.AddSnapshot(position, rotation, _gameTime);
         _lastMoveDirection = moveDirection;
+        _lastControllerRotation = controllerRotation;
     }
 }

@@ -30,9 +30,13 @@ public class ServerClientConnection : Connection
             // Route through NetworkManager (will forward to other clients)
             NetworkManager.Instance?.HandleActorMove(moveMessage, Socket);
         }
-        else if (message is ControllerStateMessage stateMessage)
+        else if (message is PlayerInputMessage inputMessage)
         {
-            NetworkManager.Instance?.HandleControllerState(stateMessage, Socket);
+            NetworkManager.Instance?.HandlePlayerInput(inputMessage, Socket);
+        }
+        else if (message is InputEventMessage inputEventMessage)
+        {
+            NetworkManager.Instance?.HandleInputEvent(inputEventMessage, Socket);
         }
 
         base.ProcessMessage(message);
@@ -88,15 +92,20 @@ public class ServerClientConnection : Connection
             );
             spawnMessage.Send(Socket);
 
-            // Send host's current controller state so remote starts in sync
+            // Send host's current input state so remote starts in sync
             var hostController = hostPawn.Controller as RPlayerControllerCombat;
-            if (hostController != null)
+            var hostInput = hostController?.PlayerInput as RPlayerInput;
+            if (hostInput != null)
             {
-                var stateMessage = new ControllerStateMessage(
+                var inputMessage = new PlayerInputMessage(
                     hostComponent.NetId,
-                    hostController.GetStateName().ToString()
+                    hostInput.aForward,
+                    hostInput.aStrafe,
+                    hostInput.bCrouchButton,
+                    hostInput.bRunButton,
+                    hostController.InputHeading(false)
                 );
-                stateMessage.Send(Socket);
+                inputMessage.Send(Socket);
             }
         }
 

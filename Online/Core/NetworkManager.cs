@@ -56,15 +56,21 @@ public class NetworkManager
         _serverSocket = socket;
     }
 
-    public void BroadcastTransform(int netId, Vector3 location, Rotator rotation, Vector3 moveDirection)
+    public void BroadcastTransform(int netId, Vector3 location, Rotator rotation, Vector3 moveDirection, Rotator controllerRotation)
     {
-        var message = new ActorMoveMessage(netId, location, rotation, moveDirection);
+        var message = new ActorMoveMessage(netId, location, rotation, moveDirection, controllerRotation);
         BroadcastMessage(message);
     }
 
-    public void BroadcastControllerState(int netId, FName stateName)
+    public void BroadcastPlayerInput(int netId, float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading)
     {
-        var message = new ControllerStateMessage(netId, stateName.ToString());
+        var message = new PlayerInputMessage(netId, aForward, aStrafe, bCrouchButton, bRunButton, inputHeading);
+        BroadcastMessage(message);
+    }
+
+    public void BroadcastInputEvent(int netId, string eventName)
+    {
+        var message = new InputEventMessage(netId, eventName);
         BroadcastMessage(message);
     }
 
@@ -108,7 +114,7 @@ public class NetworkManager
         var component = GetRemotePlayer(message.NetId);
         if (component != null)
         {
-            component.ReceiveTransform(message.NewLocation, message.NewRotation, message.MoveDirection);
+            component.ReceiveTransform(message.NewLocation, message.NewRotation, message.MoveDirection, message.ControllerRotation);
         }
         else
         {
@@ -119,20 +125,35 @@ public class NetworkManager
         ForwardToOtherClients(message, senderSocket);
     }
 
-    public void HandleControllerState(ControllerStateMessage message, Socket senderSocket = null)
+    public void HandlePlayerInput(PlayerInputMessage message, Socket senderSocket = null)
     {
         // Find the remote player's controller
         var playerComponent = GetRemotePlayer(message.NetId);
         if (playerComponent?.Owner?.Controller is RPlayerControllerCombat controller)
         {
             var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
-            if (controllerComponent != null)
-            {
-                controllerComponent.ReceiveStateChange(new FName(message.StateName));
-            }
+            controllerComponent?.ReceivePlayerInput(
+                message.AForward,
+                message.AStrafe,
+                message.BCrouchButton,
+                message.BRunButton,
+                message.InputHeading
+            );
         }
 
         // If we're the server, forward to other clients
+        ForwardToOtherClients(message, senderSocket);
+    }
+
+    public void HandleInputEvent(InputEventMessage message, Socket senderSocket = null)
+    {
+        var playerComponent = GetRemotePlayer(message.NetId);
+        if (playerComponent?.Owner?.Controller is RPlayerControllerCombat controller)
+        {
+            var controllerComponent = controller.GetScriptComponent<NetControllerComponent>();
+            controllerComponent?.ReceiveInputEvent(message.EventName);
+        }
+
         ForwardToOtherClients(message, senderSocket);
     }
 
@@ -161,8 +182,11 @@ public class NetworkManager
 
     public void HandleActorSpawn(ActorSpawnMessage message)
     {
+        var gameViewportClient = Game.GetGameViewportClient();
+
         // Spawn a controller for the remote player
-        var controller = Game.SpawnActor<RPlayerControllerCombat>(message.Location, message.Rotation);
+        var player = gameViewportClient.CreatePlayer(1, out _, true);
+        var controller = (RPlayerControllerCombat)player.Actor;
         if (controller != null)
         {
             Debug.Log($"[NetworkManager] Spawned controller NetId={message.NetId}");
@@ -178,11 +202,6 @@ public class NetworkManager
         {
             Debug.Log($"[NetworkManager] Failed to spawn controller for NetId={message.NetId}");
         }
-
-        // Spawn a pawn for the remote player
-        var gameInfo = Game.GetGameInfo();
-        gameInfo.DefaultPawnClass = RPawnPlayerBm.StaticClass();
-        gameInfo.RestartPlayer(controller);
 
         var pawn = (RPawnPlayerCombat)controller.Pawn;
         if (pawn == null)

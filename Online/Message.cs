@@ -15,7 +15,8 @@ public record class ActorMoveMessage(
     int NetId,
     Vector3 NewLocation,
     Rotator NewRotation,
-    Vector3 MoveDirection
+    Vector3 MoveDirection,
+    Rotator ControllerRotation
 ) : Message
 {
     public override byte TypeId => 2;
@@ -26,14 +27,26 @@ public record class ActorSpawnMessage(int NetId, string ActorClass, Vector3 Loca
     public override byte TypeId => 3;
 }
 
-public record class ControllerStateMessage(int NetId, string StateName) : Message
+public record class PlayerInputMessage(
+    int NetId,
+    float AForward,
+    float AStrafe,
+    byte BCrouchButton,
+    byte BRunButton,
+    Vector3 InputHeading
+) : Message
 {
     public override byte TypeId => 4;
 }
 
+public record class InputEventMessage(int NetId, string EventName) : Message
+{
+    public override byte TypeId => 5;
+}
+
 public abstract record class Message
 {
-    public const short BufferSize = 256;
+    public const short BufferSize = 512;
 
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {

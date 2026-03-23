@@ -494,22 +494,19 @@ Before relying on redirect, verify each function. In the reference `.uc` files:
 - [x] Position updates smoothly
 - [x] Basic idle animation plays
 
-### Milestone 1.5: "I See You Posing" ✅ COMPLETE
-- [x] Crouch/stand poses sync
-- [x] Glide pose works
-- [x] Gadget poses sync
-- [x] Walk/run animations
-
 ### Milestone 2: "I See You Walking" 🔲 IN PROGRESS
 - [x] Walk/run animations sync (via MoveInDirection + controller state)
 - [x] Crouch/stand transitions work (via controller StealthMoveMode sync)
-- [ ] Glide looks correct
+- [x] Glide looks correct
+- [ ] Railing walk looks correct
+- [ ] Ledge hang looks correct
+- [ ] Gadget aiming looks correct
 
 ### Milestone 3: "I See You Fighting" (Phase 2)
 - [ ] Strike animations visible
 - [ ] Counter animations visible
 - [ ] Takedown animations visible
-- [ ] Evade/roll animations visible
+- [ ] Redirect animations visible
 
 ### Milestone 4: "We Can Fight Together" (Phase 3)
 - [ ] Enemies react to both players
