@@ -62,9 +62,9 @@ public class NetworkManager
         BroadcastMessage(message);
     }
 
-    public void BroadcastPlayerInput(int netId, float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading)
+    public void BroadcastPlayerInput(int netId, float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
     {
-        var message = new PlayerInputMessage(netId, aForward, aStrafe, bCrouchButton, bRunButton, inputHeading);
+        var message = new PlayerInputMessage(netId, aForward, aStrafe, bCrouchButton, bRunButton, inputHeading, bReadyGadgetButton, aGrappleButton, aTurn, aLookUp);
         BroadcastMessage(message);
     }
 
@@ -137,7 +137,11 @@ public class NetworkManager
                 message.AStrafe,
                 message.BCrouchButton,
                 message.BRunButton,
-                message.InputHeading
+                message.InputHeading,
+                message.BReadyGadgetButton,
+                message.AGrappleButton,
+                message.ATurn,
+                message.ALookUp
             );
         }
 

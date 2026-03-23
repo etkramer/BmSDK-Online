@@ -103,7 +103,11 @@ public class ServerClientConnection : Connection
                     hostInput.aStrafe,
                     hostInput.bCrouchButton,
                     hostInput.bRunButton,
-                    hostController.InputHeading(false)
+                    hostController.InputHeading(false),
+                    hostInput.bReadyGadgetButton,
+                    hostInput.aGrappleButton,
+                    hostInput.aTurn,
+                    hostInput.aLookUp
                 );
                 inputMessage.Send(Socket);
             }

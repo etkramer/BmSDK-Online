@@ -33,7 +33,11 @@ public record class PlayerInputMessage(
     float AStrafe,
     byte BCrouchButton,
     byte BRunButton,
-    Vector3 InputHeading
+    Vector3 InputHeading,
+    byte BReadyGadgetButton,
+    byte AGrappleButton,
+    float ATurn,
+    float ALookUp
 ) : Message
 {
     public override byte TypeId => 4;

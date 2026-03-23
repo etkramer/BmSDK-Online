@@ -37,13 +37,6 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
     /// </summary>
     public bool IsRemote => !IsLocal;
 
-    // Last known input values for change detection
-    private float _lastAForward;
-    private float _lastAStrafe;
-    private byte _lastBCrouchButton;
-    private byte _lastBRunButton;
-    private Vector3 _lastInputHeading;
-
     // Last heading received from the network, returned by the InputHeading redirect on remotes
     private Vector3 _remoteInputHeading;
 
@@ -98,36 +91,25 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
             return;
         }
 
-        var aForward = playerInput.aForward;
-        var aStrafe = playerInput.aStrafe;
-        var bCrouchButton = playerInput.bCrouchButton;
-        var bRunButton = playerInput.bRunButton;
-        var inputHeading = Owner.InputHeading(false);
-
-        // Check if any input changed
-        bool changed = aForward != _lastAForward ||
-                       aStrafe != _lastAStrafe ||
-                       bCrouchButton != _lastBCrouchButton ||
-                       bRunButton != _lastBRunButton ||
-                       inputHeading != _lastInputHeading;
-
-        if (changed)
-        {
-            _lastAForward = aForward;
-            _lastAStrafe = aStrafe;
-            _lastBCrouchButton = bCrouchButton;
-            _lastBRunButton = bRunButton;
-            _lastInputHeading = inputHeading;
-
-            NetworkManager.Instance?.BroadcastPlayerInput(NetId, aForward, aStrafe, bCrouchButton, bRunButton, inputHeading);
-        }
+        NetworkManager.Instance?.BroadcastPlayerInput(
+            NetId,
+            playerInput.aForward,
+            playerInput.aStrafe,
+            playerInput.bCrouchButton,
+            playerInput.bRunButton,
+            Owner.InputHeading(false),
+            playerInput.bReadyGadgetButton,
+            playerInput.aGrappleButton,
+            playerInput.aTurn,
+            playerInput.aLookUp
+        );
     }
 
     /// <summary>
     /// Called when receiving input values from the network.
     /// Sets the input values directly, letting the controller handle state transitions.
     /// </summary>
-    public void ReceivePlayerInput(float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading)
+    public void ReceivePlayerInput(float aForward, float aStrafe, byte bCrouchButton, byte bRunButton, Vector3 inputHeading, byte bReadyGadgetButton, byte aGrappleButton, float aTurn, float aLookUp)
     {
         if (!IsRemote)
         {
@@ -145,6 +127,10 @@ public class NetControllerComponent : ScriptComponent<RPlayerControllerCombat>
         playerInput.bCrouchButton = bCrouchButton;
         playerInput.bRunButton = bRunButton;
         _remoteInputHeading = inputHeading;
+        playerInput.bReadyGadgetButton = bReadyGadgetButton;
+        playerInput.aGrappleButton = aGrappleButton;
+        playerInput.aTurn = aTurn;
+        playerInput.aLookUp = aLookUp;
     }
 
     [ComponentRedirect(nameof(RPlayerControllerCombat.InputHeading))]
